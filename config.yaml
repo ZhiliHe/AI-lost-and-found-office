@@ -1,0 +1,58 @@
+# AI Lost & Found - project config
+# Change `vlm.model` to swap models. Nothing else in the code hardcodes a model.
+
+vlm:
+  # backend: mlx | transformers | dummy
+  #   mlx          -> Apple Silicon, via mlx-vlm  (recommended on Mac)
+  #   transformers -> CUDA / CPU, via HuggingFace transformers
+  #   dummy        -> no model needed, returns canned output (for development)
+  backend: mlx
+  model: mlx-community/Qwen3-VL-2B-Instruct-4bit
+  # Each object costs ~120 tokens, so 15 objects needs ~1800. 3072 is ample for
+  # any real desk.
+  #
+  # Do NOT raise this to "be safe". A 2B model that starts repeating itself will
+  # happily fill whatever budget you give it, and generation time scales with
+  # the budget - 8192 took minutes per image on an 8GB Mac. Capping low bounds
+  # the damage, and the parser salvages every complete object from whatever was
+  # produced before the cut.
+  max_tokens: 3072
+  temperature: 0.0
+
+  # IMPORTANT: never feed full-resolution phone photos to the VLM.
+  # 4032px images explode into tens of thousands of vision tokens and will
+  # stall an 8GB machine. But 1024 turned out to be too aggressive: on a
+  # 4032x3024 desk photo, chargers and cables shrank to ~40px and the model
+  # missed them. 1280 is the compromise. Raise it if small objects are still
+  # being missed, and watch memory.
+  max_image_side: 1280
+
+  # How the model reports bounding boxes.
+  #   norm1000     -> coordinates normalised to 0..1000 (we ASK for this in the prompt)
+  #   abs_resized  -> absolute pixels in the *resized* image the model actually saw
+  # If your boxes land in the wrong place, this is the first thing to change.
+  # Verify with:  python -m src.visualize --scene office_01
+  coord_mode: norm1000
+
+paths:
+  images: data/images
+  index: data/scene_index.json
+  ground_truth: data/ground_truth.json
+  debug: data/debug
+
+agent:
+  # How many clarification questions before we give up and show the shortlist.
+  max_clarify_turns: 3
+  # How many scenes the retrieval stage passes on to the candidate stage.
+  top_k_scenes: 5
+
+  # Query-time VLM verification (src/verify.py).
+  #
+  # OFF by default. The index is built once offline, so a query normally costs
+  # ~10ms of dictionary lookups. Turning this on makes the agent crop each
+  # candidate and ask the model "is this really it?" before bothering the user -
+  # which catches indexing mistakes (a bottle labelled "mug"), but costs one
+  # model call per candidate, 2-5s each on an 8GB Mac.
+  #
+  # Turn it on with:  python -m src.cli --verify "where is my bottle"
+  verify_with_vlm: false

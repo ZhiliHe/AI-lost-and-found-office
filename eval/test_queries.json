@@ -1,0 +1,77 @@
+[
+  {
+    "id": "easy-01",
+    "query": "Find the blue bottle",
+    "answers": [],
+    "expect": "office_01_o2",
+    "difficulty": "easy",
+    "note": "unique attribute, should answer with zero questions"
+  },
+  {
+    "id": "easy-02",
+    "query": "Where is the red umbrella?",
+    "answers": [],
+    "expect": "lounge_01_o1",
+    "difficulty": "easy"
+  },
+  {
+    "id": "spatial-01",
+    "query": "Find the black bottle beside the laptop",
+    "answers": [],
+    "expect": "office_01_o1",
+    "difficulty": "spatial",
+    "note": "relation alone must disambiguate two black bottles"
+  },
+  {
+    "id": "spatial-02",
+    "query": "Is there a bottle next to a backpack?",
+    "answers": [],
+    "expect": "meeting_02_o1",
+    "difficulty": "spatial"
+  },
+  {
+    "id": "ambiguous-01",
+    "query": "Where is my bottle?",
+    "answers": [],
+    "expect": "office_01_o1",
+    "difficulty": "ambiguous",
+    "note": "must ASK before answering - answering immediately is a failure"
+  },
+  {
+    "id": "ambiguous-02",
+    "query": "I lost my backpack",
+    "answers": [],
+    "expect": "lounge_01_o0",
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": "ambiguous-03",
+    "query": "Where is my notebook?",
+    "answers": [],
+    "expect": "meeting_02_o2",
+    "difficulty": "ambiguous",
+    "note": "'notebook' means laptop OR paper notebook - agent should ask"
+  },
+  {
+    "id": "absent-01",
+    "query": "Where is my skateboard?",
+    "answers": [],
+    "expect": null,
+    "difficulty": "absent",
+    "note": "must say it cannot find it rather than returning the nearest object"
+  },
+  {
+    "id": "absent-02",
+    "query": "Find the green bottle",
+    "answers": [],
+    "expect": null,
+    "difficulty": "absent"
+  },
+  {
+    "id": "location-01",
+    "query": "Is my bottle in the classroom?",
+    "answers": [],
+    "expect": "classroom_01_o0",
+    "difficulty": "location"
+  }
+]

@@ -1,0 +1,16 @@
+# --- core (everyone needs these) ---
+PyYAML>=6.0
+Pillow>=10.0
+gradio>=5.0        # tested on 5.x and 6.x
+
+# --- testing ---
+pytest>=8.0
+
+# --- VLM backends: install ONLY the one you need ---
+# Apple Silicon:
+#   pip install -U mlx-vlm
+# NVIDIA / CPU:
+#   pip install -U "transformers>=4.57" torch accelerate qwen-vl-utils
+#
+# If you are working on the agent / UI / retrieval, you need NEITHER.
+# Run `python scripts/make_dummy_index.py` and develop against that.

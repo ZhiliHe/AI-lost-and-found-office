@@ -1,0 +1,33 @@
+{
+  "_README": [
+    "Hand-written truth for the photos we actually took. Fill this in while you",
+    "are still standing in the room - nobody can reconstruct it from memory later.",
+    "",
+    "This is NOT produced by the model. It is what we measure the model against:",
+    "  - object recall  = how many of these the indexer actually found",
+    "  - attribute accuracy = did it get the colour right",
+    "The project brief asks for 'a small evaluation with several test cases', and",
+    "this file plus eval/test_queries.json is that deliverable.",
+    "",
+    "Delete the two example entries below once real photos exist."
+  ],
+
+  "scenes": {
+    "office_office_01": {
+      "objects": [
+        {"type": "bottle", "color": "black", "brand_or_logo": "white logo",
+         "where": "right of the laptop"},
+        {"type": "bottle", "color": "blue", "brand_or_logo": null,
+         "where": "left of the laptop"},
+        {"type": "laptop", "color": "silver", "brand_or_logo": null,
+         "where": "centre of the desk"}
+      ]
+    },
+    "classroom_classroom_01": {
+      "objects": [
+        {"type": "backpack", "color": "blue", "brand_or_logo": null,
+         "where": "on the middle desk"}
+      ]
+    }
+  }
+}

@@ -1,0 +1,14 @@
+__pycache__/
+*.pyc
+.venv/
+venv/
+.DS_Store
+.pytest_cache/
+
+# Debug renders are regenerated; don't commit them.
+data/debug/
+
+# DO commit data/scene_index.json - it is the shared contract between teammates.
+# DO commit data/ground_truth.json - it is the evaluation reference.
+# Images: commit them only if the repo stays small. Otherwise share separately.
+models/
