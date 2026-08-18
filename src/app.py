@@ -21,6 +21,83 @@ PROJECT_ROOT = Path(CFG["paths"]["index"]).parent.parent
 INDEX = None
 HIGHLIGHT = (255, 87, 51)
 DIMMED = (120, 120, 120)
+APP_CSS = """
+:root {
+    --bg: #f5f1e7;
+    --panel: #fffaf0;
+    --ink: #2d2218;
+    --muted: #6a5b4d;
+    --brand: #e55d2d;
+    --brand-soft: #f7c9b6;
+    --edge: #d9c8b6;
+}
+
+#app-root {
+    background:
+        radial-gradient(circle at 12% -5%, #ffe2b8 0%, transparent 42%),
+        radial-gradient(circle at 100% 0%, #ffd8ce 0%, transparent 36%),
+        var(--bg);
+    min-height: 100vh;
+}
+
+#hero {
+    margin-bottom: 10px;
+    padding: 16px 18px;
+    border: 1px solid var(--edge);
+    border-radius: 14px;
+    background: linear-gradient(135deg, #fffefb 0%, #fff4e6 100%);
+    box-shadow: 0 8px 24px rgba(120, 80, 40, 0.08);
+}
+
+#hero h1 {
+    margin: 0;
+    color: var(--ink);
+    letter-spacing: 0.02em;
+}
+
+#hero p,
+#hero li {
+    color: var(--muted);
+}
+
+#left-panel,
+#right-panel {
+    border: 1px solid var(--edge);
+    border-radius: 16px;
+    padding: 10px;
+    background: var(--panel);
+    box-shadow: 0 10px 24px rgba(82, 59, 37, 0.08);
+}
+
+#send-btn {
+    background: linear-gradient(120deg, #f17741 0%, #db5425 100%) !important;
+    border: none !important;
+    color: #fff !important;
+}
+
+#send-btn:hover {
+    filter: brightness(1.03);
+}
+
+#reset-btn {
+    border: 1px solid var(--edge) !important;
+    color: var(--ink) !important;
+}
+
+#status {
+    margin-top: 6px;
+    padding: 10px 12px;
+    border-radius: 10px;
+    border: 1px solid var(--edge);
+    background: #fff;
+}
+
+@media (max-width: 900px) {
+    #hero {
+        padding: 14px;
+    }
+}
+"""
 
 
 def _resolve(image_path):
@@ -76,27 +153,41 @@ def build():
     INDEX = SceneIndex.load(CFG["paths"]["index"])
     locations = ", ".join(INDEX.locations())
 
-    with gr.Blocks(title="AI Lost & Found") as demo:
+    with gr.Blocks(title="AI Lost & Found", css=APP_CSS, elem_id="app-root") as demo:
         gr.Markdown(
-            f"# AI Lost & Found\n"
-            f"**{len(INDEX.scenes)} scenes** indexed across: {locations}  \n"
-            f"Model used for indexing: `{INDEX.payload.get('model')}`\n\n"
-            "Try: *Where is my bottle?* &nbsp;|&nbsp; *Find the black bottle beside the laptop* "
-            "&nbsp;|&nbsp; *I lost a black backpack*"
+            f"""
+<div id="hero">
+  <h1>AI Lost &amp; Found</h1>
+  <p><strong>{len(INDEX.scenes)} scenes</strong> indexed across: {locations}</p>
+  <p>Model used for indexing: <strong>{INDEX.payload.get('model')}</strong></p>
+  <p>Try: <em>Where is my bottle?</em> | <em>Find the black bottle beside the laptop</em> | <em>I lost a black backpack</em></p>
+</div>
+"""
         )
 
         session_state = gr.State(None)
 
         with gr.Row():
-            with gr.Column(scale=1):
-                chat = _chatbot(height=430, label="Conversation")
-                box = gr.Textbox(placeholder="Where is my bottle?", label="You", autofocus=True)
+            with gr.Column(scale=1, elem_id="left-panel"):
+                chat = _chatbot(height=440, label="Conversation")
+                box = gr.Textbox(
+                    placeholder="Where is my bottle?",
+                    label="Describe what you lost",
+                    autofocus=True,
+                )
                 with gr.Row():
-                    send = gr.Button("Send", variant="primary")
-                    reset = gr.Button("New search")
-            with gr.Column(scale=1):
-                view = gr.Gallery(label="Candidates", height=430, columns=2, object_fit="contain")
-                status = gr.Markdown("")
+                    send = gr.Button("Send", variant="primary", elem_id="send-btn")
+                    reset = gr.Button("New search", elem_id="reset-btn")
+            with gr.Column(scale=1, elem_id="right-panel"):
+                view = gr.Gallery(
+                    label="Candidate matches",
+                    height=440,
+                    columns=2,
+                    object_fit="contain",
+                    preview=True,
+                    allow_preview=True,
+                )
+                status = gr.Markdown("", elem_id="status")
 
         def respond(message, history, session):
             message = (message or "").strip()
@@ -120,7 +211,9 @@ def build():
             if reply.kind == "answer":
                 note = "**Resolved.** " + note
 
-            return history, session, gallery_for(reply.candidates), note
+            # Keep the final image visible even if a reply omits candidates.
+            shown_candidates = reply.candidates or session.candidates
+            return history, session, gallery_for(shown_candidates), note
 
         def clear():
             return [], None, [], ""

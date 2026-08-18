@@ -8,7 +8,7 @@
     {
       "scene_id": "office_front",
       "location": "office",
-      "image_path": "/Users/cheolhokim/Desktop/summercamp팀플/ai-lost-and-found/data/images/office/front.jpg",
+      "image_path": "images/office/front.jpg",
       "width": 1707,
       "height": 1280,
       "caption": "a desk with a blue laptop, a gray laptop, a water bottle, a cup, a phone, a charger, a power bank, a wallet, a pen, a backpack, and a blue umbrella",
@@ -1026,7 +1026,7 @@
     {
       "scene_id": "office_left",
       "location": "office",
-      "image_path": "/Users/cheolhokim/Desktop/summercamp팀플/ai-lost-and-found/data/images/office/left.jpg",
+      "image_path": "images/office/left.jpg",
       "width": 1291,
       "height": 1280,
       "caption": "A wooden desk with various personal items, including two laptops, a water bottle, a phone, an umbrella, a mouse, and a backpack.",
