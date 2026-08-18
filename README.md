@@ -36,7 +36,7 @@ and keep working unchanged when the real photos arrive.
 Then:
 
 ```bash
-python -m pytest -q        # 64 tests
+python -m pytest -q        # 65 tests
 python eval/run_eval.py    # the evaluation table for the report
 python -m src.app          # optional Gradio UI (the CLI already shows photos)
 ```
@@ -283,6 +283,22 @@ Then `python -m src.indexer --force`. No code changes anywhere.
 resulting `scene_index.json`. Everyone else then needs no model at all.
 Use **one** model for the whole index — mixing models produces inconsistent
 attributes and retrieval silently degrades.
+
+---
+
+## Platform notes
+
+Everything except the VLM backend is pure Python and runs on macOS, Linux and
+Windows. Two things to know:
+
+- **Windows and Linux cannot use the `mlx` backend** — it is Apple Silicon only.
+  Use `backend: transformers` (`pip install -U "transformers>=4.57" torch
+  accelerate qwen-vl-utils jinja2`), or skip indexing entirely: `scene_index.json`
+  is committed, so the agent, retrieval, UI and tests all run with no model.
+- **Paths in the index are always POSIX-style** (`data/images/office/x.jpg`),
+  written with `as_posix()` on every platform. A Windows machine writing
+  `data\images\office\x.jpg` into the shared index would break every Mac and
+  Linux teammate; a test enforces this.
 
 ---
 

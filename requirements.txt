@@ -1,16 +1,26 @@
-# --- core (everyone needs these) ---
+# --- core: everything except the VLM itself runs on these ---
 PyYAML>=6.0
-Pillow>=10.0
-gradio>=5.0        # tested on 5.x and 6.x
+Pillow>=10.0        # image loading, box drawing, the result renderer
 
 # --- testing ---
 pytest>=8.0
 
-# --- VLM backends: install ONLY the one you need ---
+# --- optional extras --------------------------------------------------------
+#
+# The CLI already opens result photos with boxes drawn on them, so nothing
+# below is needed for a working demo.
+#
+#   pip install gradio      # web UI (python -m src.app)
+#                           # ~40 transitive deps; slow on a bad network
+#   pip install requests    # only for scripts/download_model.py
+#
+# --- VLM backends: install ONLY the one you need ----------------------------
+#
 # Apple Silicon:
 #   pip install -U mlx-vlm
-# NVIDIA / CPU:
-#   pip install -U "transformers>=4.57" torch accelerate qwen-vl-utils
 #
-# If you are working on the agent / UI / retrieval, you need NEITHER.
+# NVIDIA / CPU:
+#   pip install -U "transformers>=4.57" torch accelerate qwen-vl-utils jinja2
+#
+# If you are working on the agent, retrieval or the UI you need NEITHER.
 # Run `python scripts/make_dummy_index.py` and develop against that.

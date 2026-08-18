@@ -106,7 +106,11 @@ def main():
         scenes.append({
             "scene_id": scene_id,
             "location": location,
-            "image_path": str(image_path.relative_to(Path(cfg["paths"]["images"]).parent.parent)),
+            # as_posix(), NOT str(): a Windows machine would otherwise write
+            # "data\\images\\office\\x.jpg" into the shared index, which no Mac
+            # or Linux teammate can then open. src/indexer.py does the same.
+            "image_path": image_path.relative_to(
+                Path(cfg["paths"]["images"]).parent.parent).as_posix(),
             "width": W, "height": H,
             "caption": caption,
             "objects": objects,

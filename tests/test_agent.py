@@ -370,3 +370,18 @@ def test_verification_never_empties_the_result(index, config):
     cfg = {"paths": {"index": "data/scene_index.json", "debug": "data/debug"}}
     survivors = verify_candidates(candidates, "bottle", RejectEverything(), cfg)
     assert survivors            # never empty
+
+
+def test_index_paths_are_posix_style():
+    """A Windows teammate must not write "data\\images\\x.jpg" into the shared
+    index - no Mac or Linux machine could open it afterwards."""
+    import subprocess
+    import sys
+    import json
+    from pathlib import Path
+
+    subprocess.run([sys.executable, "scripts/make_dummy_index.py"],
+                   check=True, capture_output=True)
+    payload = json.loads(Path("data/scene_index.json").read_text(encoding="utf-8"))
+    for scene in payload["scenes"]:
+        assert "\\" not in scene["image_path"], scene["image_path"]

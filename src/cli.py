@@ -8,6 +8,7 @@ prints the internal state, so you can see WHY it asked a question.
 """
 
 import argparse
+import os
 import subprocess
 import sys
 from pathlib import Path
@@ -20,12 +21,19 @@ from .visualize import render_result
 
 
 def open_file(path):
-    """Pop the image with whatever the OS uses. Best-effort only."""
+    """Pop the image with whatever the OS uses. Best-effort only.
+
+    Windows needs os.startfile, NOT subprocess.run(["start", ...]) - "start" is
+    a cmd.exe builtin, not an executable, so spawning it raises FileNotFoundError.
+    """
     try:
-        opener = {"darwin": "open", "win32": "start"}.get(sys.platform, "xdg-open")
+        if sys.platform == "win32":
+            os.startfile(str(path))                      # noqa: S606
+            return
+        opener = "open" if sys.platform == "darwin" else "xdg-open"
         subprocess.run([opener, str(path)], check=False,
                        stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    except OSError:
+    except (OSError, AttributeError):
         pass
 
 
