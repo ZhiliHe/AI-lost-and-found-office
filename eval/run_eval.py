@@ -41,6 +41,8 @@ def answer_as_the_user(reply, scene, obj):
     key = reply.asked_key
     if key == "location":
         return scene.get("location", "i don't know")
+    if key == "type":
+        return obj.get("type", "i don't know")
 
     value = obj.get("attributes", {}).get(key)
     options = reply.options or []

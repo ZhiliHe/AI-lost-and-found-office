@@ -132,6 +132,65 @@ def test_over_filtering_backs_off_instead_of_dead_ending(index, config):
     assert reply.candidates
 
 
+# --- volunteered attributes from an answer ----------------------------------- #
+
+def test_volunteered_material_is_captured_from_an_answer(index, config):
+    """Asked about the colour, 'it's black and made of metal' answers BOTH -
+    the volunteered material must not cost a second turn."""
+    session = Session(index, config)
+    reply = session.start("where is my bottle")
+    assert reply.asked_key == "color"
+
+    reply = session.reply("it's black and made of metal")
+    assert session.constraints.get("color") == "black"
+    assert session.constraints.get("material") == "metal"
+    # two black metal bottles remain and nothing else can separate them
+    assert reply.kind == "giveup"
+    assert len(reply.candidates) == 2
+
+
+def test_size_is_volunteered_from_an_answer(index, config):
+    """'black, it's small' while answering the colour question captures the
+    size too - and when the volunteered value fits nothing, the backoff drops
+    THE IMPOSSIBLE constraint (size), not the good one (colour)."""
+    session = Session(index, config)
+    reply = session.start("where is my bottle")
+    assert reply.asked_key == "color"
+
+    reply = session.reply("black, it's small")
+    # no bottle in the index is small: the agent kept the colour and honestly
+    # reports that "small" matched nothing, with the black bottles as the
+    # closest candidates
+    assert session.constraints.get("color") == "black"
+    assert reply.kind == "giveup"
+    assert "small" in reply.text
+    assert reply.candidates
+    assert all(c["object"]["attributes"]["color"] == "black"
+               for c in reply.candidates)
+
+
+def test_indexer_drops_boxes_copied_from_the_prompt_example():
+    """The 2B model anchors on the JSON example in the prompt and copies the
+    example laptop/charger bbox onto unrelated photos. A box that exactly
+    matches the example is proof the model did NOT localise - it must not be
+    indexed, or every desk photo claims a laptop at the same wrong spot."""
+    from src.indexer import EXAMPLE_BBOXES, clean_object
+
+    for example in EXAMPLE_BBOXES:
+        obj = clean_object({"type": "laptop", "color": "blue",
+                            "material": "metal", "size": "large",
+                            "bbox": list(example), "confidence": 0.95},
+                           "office_01", 0, "norm1000", (1000, 1000), (1000, 1000))
+        assert obj is None, example
+
+    # a genuinely different box is kept
+    kept = clean_object({"type": "laptop", "color": "blue",
+                         "material": "metal", "size": "large",
+                         "bbox": [123, 456, 789, 987], "confidence": 0.95},
+                        "office_01", 0, "norm1000", (1000, 1000), (1000, 1000))
+    assert kept is not None
+
+
 # --- question selection ---------------------------------------------------- #
 
 def test_split_quality_zero_when_attribute_is_uniform(index):

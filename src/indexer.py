@@ -27,6 +27,17 @@ from .vocab import normalize_color, normalize_object_type
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 
+# The model anchors on the JSON example in SCENE_EXTRACTION_PROMPT (tuning log
+# v1 -> v2 documented this): whenever a photo contains a laptop or a charger it
+# tends to copy the example's ENTIRE entry, bbox included, so the same
+# [470, 300, 660, 430] box appears on unrelated photos. A box that exactly
+# matches an example is proof the model did NOT localise - drop it rather than
+# index a box that sits on the wrong object. In 0-1000 normalised space.
+EXAMPLE_BBOXES = (
+    (470, 300, 660, 430),      # the prompt's example laptop
+    (265, 335, 320, 375),      # the prompt's example charger
+)
+
 
 def iter_images(images_root, only=None):
     """data/images/<location>/<file>  ->  (location, path), sorted."""
@@ -103,6 +114,10 @@ def clean_object(raw, scene_id, position, coord_mode, resized_wh, original_wh):
     if not isinstance(bbox, (list, tuple)) or len(bbox) != 4:
         return None
     try:
+        raw_box = [round(float(v)) for v in bbox]
+        if any(all(abs(raw_box[i] - example[i]) <= 2 for i in range(4))
+               for example in EXAMPLE_BBOXES):
+            return None  # copied from the prompt example, not a localisation
         bbox = to_original_pixels(bbox, coord_mode, resized_wh, original_wh)
     except (TypeError, ValueError):
         return None
@@ -128,13 +143,20 @@ def clean_object(raw, scene_id, position, coord_mode, resized_wh, original_wh):
     }
 
 
-def index_one(backend, image_path, location, cfg):
+def _prepare(cfg, location, image_path):
+    """Resize the photo and decide the scene id. Shared by the single-image
+    path and the CUDA batch path."""
     vlm_cfg = cfg["vlm"]
     scene_id = make_scene_id(location, image_path)
     model_path, resized_wh, original_wh = prepare_image(
         image_path, vlm_cfg.get("max_image_side", 1024), cfg["paths"]["debug"])
+    return scene_id, model_path, resized_wh, original_wh
 
-    raw_text = backend.describe(model_path, SCENE_EXTRACTION_PROMPT)
+
+def scene_from_raw(raw_text, cfg, location, image_path, scene_id,
+                   resized_wh, original_wh):
+    """Turn the model's raw answer into a scene dict (the parse pipeline)."""
+    vlm_cfg = cfg["vlm"]
 
     # Always keep the model's raw answer. When recall is bad you need to know
     # whether the model said little, or said a lot and our parser dropped it.
@@ -181,6 +203,14 @@ def index_one(backend, image_path, location, cfg):
     }
 
 
+def index_one(backend, image_path, location, cfg):
+    """Index ONE image through any backend (used when batching is unavailable)."""
+    scene_id, model_path, resized_wh, original_wh = _prepare(cfg, location, image_path)
+    raw_text = backend.describe(model_path, SCENE_EXTRACTION_PROMPT)
+    return scene_from_raw(raw_text, cfg, location, image_path, scene_id,
+                          resized_wh, original_wh)
+
+
 def write_index(index_path, cfg, scenes):
     payload = {
         "version": 1,
@@ -201,7 +231,7 @@ def write_index(index_path, cfg, scenes):
     return payload
 
 
-def build_index(cfg, only=None, force=False, limit=None):
+def build_index(cfg, only=None, force=False, limit=None, backend=None):
     index_path = Path(cfg["paths"]["index"])
     existing = {}
     if index_path.exists() and not force:
@@ -209,7 +239,8 @@ def build_index(cfg, only=None, force=False, limit=None):
             for scene in json.load(fh).get("scenes", []):
                 existing[scene["scene_id"]] = scene
 
-    backend = load_backend(cfg["vlm"])
+    if backend is None:
+        backend = load_backend(cfg["vlm"])
     scenes, failures = [], []
     todo = list(iter_images(cfg["paths"]["images"], only=only))
     if limit:
@@ -219,26 +250,72 @@ def build_index(cfg, only=None, force=False, limit=None):
         print(f"No images found under {cfg['paths']['images']}/<location>/")
         print("Expected layout:  data/images/office/office_01.jpg")
 
+    # keep the already-indexed scenes (and their progress numbering) intact
     for position, (location, image_path) in enumerate(todo, 1):
         scene_id = make_scene_id(location, image_path)
         if scene_id in existing:
             print(f"[{position}/{len(todo)}] skip {scene_id} (already indexed)")
             scenes.append(existing[scene_id])
-            continue
 
-        started = time.time()
-        print(f"[{position}/{len(todo)}] {scene_id} ...", end=" ", flush=True)
-        try:
-            scene = index_one(backend, image_path, location, cfg)
-        except (VLMError, OSError) as exc:
-            print(f"FAILED: {exc}")
-            failures.append((scene_id, str(exc)))
-            continue
-        scenes.append(scene)
-        print(f"{len(scene['objects'])} objects, {time.time() - started:.1f}s")
-        # Save after EVERY image. Each one costs ~40s; losing 20 of them to a
-        # Ctrl+C is not acceptable. Re-running without --force resumes here.
-        write_index(index_path, cfg, scenes)
+    pending = [(location, image_path) for location, image_path in todo
+               if make_scene_id(location, image_path) not in existing]
+
+    # CUDA backends batch several images into ONE generate() call - generation
+    # is GPU-bound, so 2-4 images per call cost barely more than one. Other
+    # backends fall back to one image at a time.
+    batch_size = int(cfg["vlm"].get("batch_size", 1))
+    use_batch = getattr(backend, "supports_batch", False) and batch_size > 1
+    if use_batch:
+        print(f"CUDA batching: {batch_size} images per generation call "
+              f"(vlm.batch_size)")
+
+    position = len(todo) - len(pending)
+    for start in range(0, len(pending), batch_size):
+        chunk = pending[start:start + batch_size]
+        prepared = [_prepare(cfg, location, image_path)
+                    for location, image_path in chunk]
+
+        # One generate() call for the whole chunk. If it fails (corrupt image,
+        # out of memory, ...), fall back to one image at a time so a single
+        # bad image cannot take the run down.
+        raw_texts = None
+        batch_elapsed = None
+        if use_batch:
+            try:
+                batch_started = time.time()
+                raw_texts = iter(backend.describe_batch(
+                    [(model_path, SCENE_EXTRACTION_PROMPT)
+                     for _, model_path, _, _ in prepared]))
+                batch_elapsed = time.time() - batch_started
+                print(f"(batch of {len(chunk)} imgs, {batch_elapsed:.0f}s) ", end="")
+            except Exception as exc:                 # noqa: BLE001
+                print(f"(batch of {len(chunk)} failed: {str(exc)[:160]}; "
+                      f"retrying one by one) ", end="")
+                raw_texts = None
+
+        for (location, image_path), (scene_id, model_path, rw, oh) in zip(chunk, prepared):
+            position += 1
+            print(f"[{position}/{len(todo)}] {scene_id} ...", end=" ", flush=True)
+            started = time.time()
+            try:
+                raw = next(raw_texts) if raw_texts is not None else \
+                    backend.describe(model_path, SCENE_EXTRACTION_PROMPT)
+                scene = scene_from_raw(raw, cfg, location, image_path, scene_id,
+                                       rw, oh)
+            except (VLMError, OSError) as exc:
+                print(f"FAILED: {exc}")
+                failures.append((scene_id, str(exc)))
+                continue
+            scenes.append(scene)
+            # On the batch path the GPU time is shared across the chunk, so
+            # report the amortised per-image cost instead of the ~0s it took
+            # to parse an already-generated answer.
+            per_image = (batch_elapsed / len(chunk)) if batch_elapsed else \
+                time.time() - started
+            print(f"{len(scene['objects'])} objects, {per_image:.1f}s")
+            # Save after EVERY image. Each one costs ~40s; losing 20 of them to a
+            # Ctrl+C is not acceptable. Re-running without --force resumes here.
+            write_index(index_path, cfg, scenes)
 
     payload = write_index(index_path, cfg, scenes)
 

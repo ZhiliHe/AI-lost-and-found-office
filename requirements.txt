@@ -22,5 +22,20 @@ pytest>=8.0
 # NVIDIA / CPU:
 #   pip install -U "transformers>=4.57" torch accelerate qwen-vl-utils jinja2
 #
+# --- CUDA acceleration (backend: cuda in config.yaml) ------------------------
+#
+# The torch wheel on the PyPI default index is a CPU-only build and will NOT
+# see your GPU. On an NVIDIA machine install the CUDA wheel first, then the
+# rest, then set `backend: cuda` in config.yaml:
+#
+#   pip install torch --index-url https://download.pytorch.org/whl/cu128
+#   pip install -U "transformers>=4.57" accelerate qwen-vl-utils jinja2
+#   pip install flash-attn --no-build-isolation    # optional: Flash Attention
+#                                                  # (falls back to sdpa if absent)
+#
+# Check it worked:  python -c "import torch; print(torch.cuda.is_available())"
+# The indexer then prints the GPU name and runs images in batches
+# (vlm.batch_size) - 2-4 images per generation call instead of one.
+#
 # If you are working on the agent, retrieval or the UI you need NEITHER.
 # Run `python scripts/make_dummy_index.py` and develop against that.

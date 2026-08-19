@@ -24,11 +24,12 @@ with a hard cap on turns so we can never loop forever.
 """
 
 from dataclasses import dataclass, field
+import re
 
 from .query_parser import parse
 from .retrieval import find_candidates
 from .spatial import VIEW_DEPENDENT
-from .vocab import find_colors, negate
+from .vocab import MATERIALS, SIZES, find_colors, is_negated, negate
 
 # Order matters: we prefer to ask about attributes a human can answer instantly.
 # Removed over two rounds of looking at real output:
@@ -275,6 +276,32 @@ class Session:
         kept = {c["object"]["id"] for c in survivors}
         self.candidates = [c for c in self.candidates if c["object"]["id"] in kept]
 
+    def _volunteer(self, text, skip):
+        """Grab anything ELSE the user mentioned while answering a question.
+
+        People answer however they feel like: asked about the colour, they say
+        "it's black, and it's made of metal". The metal is real information -
+        take it for the attribute it names even though we did not ask, so it
+        never costs the user a second turn. Deliberately limited to the
+        askable attributes: location stays answer-only (see ASKABLE_KEYS).
+        """
+        if skip != "color" and "color" not in self.constraints:
+            colors = find_colors(text)
+            if colors:
+                self.constraints["color"] = colors[0]
+
+        words = set(re.findall(r"[a-z]+", text))
+        if skip != "size" and "size" not in self.constraints:
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
+                    break
+        if skip != "material" and "material" not in self.constraints:
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    break
+
     def _apply_answer(self, user_text):
         key, options = self.pending_key, self.pending_options
         self.pending_key, self.pending_options = None, []
@@ -285,13 +312,11 @@ class Session:
                     "몰라", "모르겠어", ""):
             return  # attribute burned, no constraint added
 
-        # Users answer whatever they feel like. If they mention a colour while we
-        # were asking about something else, take it anyway instead of discarding
-        # a perfectly good clue.
-        if key != "color" and "color" not in self.constraints:
-            volunteered = find_colors(text)
-            if volunteered:
-                self.constraints["color"] = volunteered[0]
+        # Users answer whatever they feel like. Take any attribute they mention
+        # that we were NOT asking about, instead of discarding a good clue.
+        self._volunteer(text, skip=key)
+
+        words = set(re.findall(r"[a-z]+", text))
 
         if key == "color":
             colors = find_colors(text)
@@ -309,6 +334,19 @@ class Session:
                 # instead of pretending the answer told us nothing.
                 self.constraints["color"] = colors[0]
             return
+
+        # Accept any KNOWN size/material, not just the values we offered:
+        # "small" is a fine answer to "medium or large?".
+        if key == "size":
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
+                    return
+        if key == "material":
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    return
 
         # Only one value to offer, so it became a yes/no question.
         # "No" is just as informative as "yes" - it rules that value out.
@@ -333,19 +371,28 @@ class Session:
 
         if not self.candidates:
             if self.constraints:
-                # We over-filtered. Drop the newest constraint and be honest.
-                dropped = list(self.constraints)[-1]
-                self.constraints.pop(dropped)
-                self.candidates = find_candidates(
-                    self.index, self.parsed, self.constraints,
-                    top_k_scenes=self.top_k_scenes,
-                    merge_across_views=self.merge_across_views)
-                if self.candidates:
-                    return Reply(
-                        "giveup",
-                        f"I couldn't find anything matching that {dropped}. "
-                        f"Here is the closest I have for \"{self.parsed.describe()}\":",
-                        candidates=self.candidates[:3])
+                # We over-filtered. The newest constraint is usually the
+                # culprit (the answer to the last question), but a volunteered
+                # value can be inserted before it - so try dropping constraints
+                # one at a time, newest first, until something survives again.
+                for dropped in reversed(list(self.constraints)):
+                    value = self.constraints[dropped]
+                    trial = dict(self.constraints)
+                    trial.pop(dropped)
+                    refound = find_candidates(
+                        self.index, self.parsed, trial,
+                        top_k_scenes=self.top_k_scenes,
+                        merge_across_views=self.merge_across_views)
+                    if refound:
+                        self.constraints = trial
+                        self.candidates = refound
+                        label = (f"not {value[1]}" if is_negated(value)
+                                 else value)
+                        return Reply(
+                            "giveup",
+                            f"I couldn't find anything matching \"{label}\". "
+                            f"Here is the closest I have for \"{self.parsed.describe()}\":",
+                            candidates=refound[:3])
             return Reply("none_found",
                          describe_not_found(self.parsed, len(self.index.scenes)))
 
