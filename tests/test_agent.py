@@ -4,7 +4,7 @@ knowing when NOT to answer.
 
 import pytest
 
-from src.agent import Session, choose_question, _split_quality
+from src.agent import Session, choose_question, format_question, _split_quality
 from src.query_parser import parse
 from src.retrieval import find_candidates, rank_scenes
 
@@ -75,13 +75,10 @@ def test_full_clarification_converges(index, config):
     assert first.kind == "question"
 
     second = session.reply("black")
-    # two black metal bottles remain, in different rooms - so it asks WHERE
-    assert second.kind == "question"
-    assert second.asked_key == "location"
-
-    final = session.reply("office")
-    assert final.kind == "answer"
-    assert final.candidates[0]["object"]["id"] == "office_01_o1"
+    # Location is the answer, not a clarification question.
+    assert second.kind == "giveup"
+    assert second.asked_key != "location"
+    assert len(second.candidates) == 2
 
 
 def test_agent_gives_up_rather_than_looping_forever(index, config):
@@ -103,6 +100,21 @@ def test_dont_know_does_not_add_a_constraint(index, config):
 def test_unknown_object_is_reported_not_guessed(index, config):
     reply = Session(index, config).start("where is my skateboard")
     assert reply.kind == "none_found"
+    assert "available pictures" in reply.text
+    assert "outside the photographed area" in reply.text
+
+
+def test_unseen_attribute_is_reported_as_absent_from_pictures(index, config):
+    reply = Session(index, config).start("find the green bottle")
+    assert reply.kind == "none_found"
+    assert "green bottle" in reply.text
+    assert "hidden from view" in reply.text
+
+
+def test_unseen_relation_is_reported_as_absent_from_pictures(index, config):
+    reply = Session(index, config).start("find the bottle beside the umbrella")
+    assert reply.kind == "none_found"
+    assert "bottle beside the umbrella" in reply.text
 
 
 def test_no_object_named_asks_for_the_object(index, config):
@@ -133,12 +145,20 @@ def test_choose_question_skips_already_asked(index):
     assert key != "color"
 
 
-def test_choose_question_falls_back_to_location(index):
+def test_choose_question_does_not_ask_for_location(index):
     candidates = find_candidates(index, parse("where is my bottle"))
     key, options = choose_question(
         candidates, already_asked=["color", "size", "material"])
-    assert key == "location"
-    assert len(options) > 1
+    assert key is None
+    assert options == []
+
+
+def test_question_wording_changes_by_turn():
+    first = format_question("color", ["black", "blue"], 3, 0)
+    second = format_question("color", ["black", "blue"], 3, 1)
+    assert first != second
+    assert "black" in first and "blue" in first
+    assert "black" in second and "blue" in second
 
 
 # --- multiple camera angles of the same place ------------------------------ #

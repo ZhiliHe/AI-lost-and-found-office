@@ -52,6 +52,7 @@ OBJECT_SYNONYMS = {
                    "external battery"],
     "tablet":     ["tablet", "ipad"],
     "watch":      ["watch", "smartwatch"],
+    "skateboard": ["skateboard", "board"],
 }
 
 # Categories a small VLM genuinely mixes up. A query for one member matches any

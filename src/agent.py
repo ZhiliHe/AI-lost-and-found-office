@@ -38,23 +38,38 @@ from .vocab import find_colors, negate
 #                   "closed", and "was your backpack open?" is not a question
 #                   anyone can answer about something they lost.
 # An attribute we cannot trust is worse than no attribute: it costs a turn.
-# "location" is a first-class question, not a last resort. Which room someone
-# left something in is one of the things people remember BEST, and when the
-# same kind of object sits in three different rooms it is the single most
-# discriminating thing we can ask.
-ASKABLE_KEYS = ["color", "location", "size", "material"]
+# Location is deliberately answer-only: the agent should identify the room
+# from the matching scene rather than ask the user for the final answer.
+ASKABLE_KEYS = ["color", "size", "material"]
 
 # Tuning knob. Question choice = (how well the attribute splits the candidates)
 # x (how reliably a human can answer it). People remember colour far better than
 # they remember what something was made of, so material is discounted.
 # Raise a value here to make the agent ask about that attribute sooner.
-KEY_PRIOR = {"color": 1.3, "location": 1.2, "size": 0.9, "material": 0.7}
+KEY_PRIOR = {"color": 1.3, "size": 0.9, "material": 0.7}
 
 KEY_QUESTIONS = {
     "color": "What colour is it?",
-    "location": "Which room was it in?",
     "size": "Roughly how big is it?",
     "material": "What is it made of?",
+}
+
+QUESTION_VARIANTS = {
+    "color": (
+        "What colour is yours?",
+        "Do you remember its colour?",
+        "Which colour matches your item?",
+    ),
+    "size": (
+        "Roughly how big was it?",
+        "Would you call it small, medium, or large?",
+        "Which size sounds right for it?",
+    ),
+    "material": (
+        "What was it made of?",
+        "Do you remember the material?",
+        "Which material fits your item?",
+    ),
 }
 
 
@@ -68,10 +83,7 @@ class Reply:
 
 
 def _value_of(cand, key):
-    """Attributes live on the object; location lives on the scene. Treating
-    them uniformly lets location compete as just another question."""
-    if key == "location":
-        return cand["scene"].get("location")
+    """Return the indexed object attribute used for clarification."""
     return cand["object"].get("attributes", {}).get(key)
 
 
@@ -122,6 +134,16 @@ def choose_question(candidates, already_asked):
     if best_key is None:
         return None, []
     return best_key, _distinct(candidates, best_key)
+
+
+def format_question(key, options, candidate_count, turn):
+    """Build a varied clarification while keeping the indexed choices explicit."""
+    choices = " or ".join(str(option) for option in options)
+    prefix = f"I found {candidate_count} possible matches."
+    if len(options) == 1:
+        return f"{prefix} Was it the one with {options[0]}?"
+    prompt = QUESTION_VARIANTS.get(key, (KEY_QUESTIONS.get(key, key),))
+    return f"{prefix} {prompt[turn % len(prompt)]} ({choices})"
 
 
 def describe_place(scene, obj, prefer_anchor=None):
@@ -176,6 +198,15 @@ def describe_object(obj):
     attributes = obj.get("attributes", {})
     bits = [attributes.get("color"), obj.get("type")]
     return " ".join(b for b in bits if b)
+
+
+def describe_not_found(parsed, scene_count):
+    """Explain that absence from the indexed photos is not proof of loss."""
+    request = parsed.describe()
+    scenes = "picture" if scene_count == 1 else "pictures"
+    return (f"I couldn't find a {request} in the {scene_count} available {scenes}. "
+            "It may be outside the photographed area, hidden from view, or in "
+            "a scene that has not been indexed yet.")
 
 
 class Session:
@@ -279,13 +310,6 @@ class Session:
                 self.constraints["color"] = colors[0]
             return
 
-        if key == "location":
-            for option in options:
-                if option.lower() in text:
-                    self.parsed.location = option
-                    return
-            return
-
         # Only one value to offer, so it became a yes/no question.
         # "No" is just as informative as "yes" - it rules that value out.
         if len(options) == 1:
@@ -323,7 +347,7 @@ class Session:
                         f"Here is the closest I have for \"{self.parsed.describe()}\":",
                         candidates=self.candidates[:3])
             return Reply("none_found",
-                         f"I couldn't find a {self.parsed.describe()} in any of the scenes I know.")
+                         describe_not_found(self.parsed, len(self.index.scenes)))
 
         if len(self.candidates) == 1:
             cand = self.candidates[0]
@@ -336,8 +360,8 @@ class Session:
         if self.turns >= self.max_turns:
             return Reply(
                 "giveup",
-                f"I still see {len(self.candidates)} possible matches and I've used my "
-                f"questions. Here are the most likely ones:",
+                f"I still see {len(self.candidates)} possible matches"
+                f" Here are the most likely ones:",
                 candidates=self.candidates[:3])
 
         key, options = choose_question(self.candidates, self.asked)
@@ -351,18 +375,7 @@ class Session:
         self.turns += 1
         self.pending_key, self.pending_options = key, options
 
-        if key == "location":
-            question = (f"I found {len(self.candidates)} possible matches. "
-                        f"Which room was it in - {' or '.join(options)}?")
-        elif key == "color":
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"What colour is yours - {' or '.join(options)}?"
-        elif len(options) == 1:
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"Was it the one with {options[0]}?"
-        else:
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"{KEY_QUESTIONS.get(key, key)} ({' / '.join(str(o) for o in options)})"
+        question = format_question(key, options, len(self.candidates), self.turns - 1)
 
         return Reply("question", question, candidates=self.candidates,
                      asked_key=key, options=options)

@@ -18,6 +18,7 @@ from .retrieval import SceneIndex
 
 CFG = load_config()
 PROJECT_ROOT = Path(CFG["paths"]["index"]).parent.parent
+IMAGE_ROOT = Path(CFG["paths"]["images"])
 INDEX = None
 HIGHLIGHT = (255, 87, 51)
 DIMMED = (120, 120, 120)
@@ -102,7 +103,14 @@ APP_CSS = """
 
 def _resolve(image_path):
     path = Path(image_path)
-    return path if path.is_absolute() else PROJECT_ROOT / path
+    if path.is_absolute():
+        return path
+    candidates = (
+        PROJECT_ROOT / path,
+        IMAGE_ROOT / path,
+        IMAGE_ROOT.parent / path,
+    )
+    return next((candidate for candidate in candidates if candidate.exists()), candidates[0])
 
 
 def render_candidates(candidates, focus=0):
