@@ -84,7 +84,10 @@ def render_result(candidates, out_dir, project_root, focus=0):
     draw.rectangle([x1, y1, x2, y2], outline=(255, 60, 40), width=width * 2)
 
     attributes = target["object"].get("attributes", {})
-    label = f" {attributes.get('color') or ''} {target['object'].get('type')} ".upper()
+    # The number matters: when the agent is asking "which one is yours?" the
+    # user is looking at several photos at once and answers with a digit.
+    label = (f" {focus + 1}. {attributes.get('color') or ''} "
+             f"{target['object'].get('type')} ").upper()
     text_y = max(0, y1 - 34 - width)
     draw.rectangle([x1, text_y, x1 + 16 * len(label), text_y + 34], fill=(255, 60, 40))
     draw.text((x1 + 6, text_y + 10), label.strip(), fill=(255, 255, 255))

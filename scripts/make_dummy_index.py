@@ -83,8 +83,8 @@ def draw_scene(path, objects):
     image.save(path, quality=92)
 
 
-def main():
-    cfg = load_config()
+def main(config_path=None):
+    cfg = load_config(config_path)
     images_root = Path(cfg["paths"]["images"])
     scenes = []
 
@@ -138,4 +138,9 @@ def main():
 
 
 if __name__ == "__main__":
-    main()
+    import argparse
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument("--config", default=None,
+                        help="use a different config - tests point this at a "
+                             "temp directory so they never touch real data")
+    main(parser.parse_args().config)

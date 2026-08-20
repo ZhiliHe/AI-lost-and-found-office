@@ -6,6 +6,14 @@ v1: long prompt, full type/colour lists inline, example showed a bottle.
     Qwen3-VL-2B returned only 2 objects (both bottles) on a desk photo
     containing ~10. It anchored on the example and stopped early.
 
+v5: the example objects are now PLACEHOLDERS, not plausible ones.
+    On a real desk photo the model copied the v4 example verbatim - same type,
+    same colour, same confidence, same bounding box to the pixel - and did it
+    for two of the eight objects it "found". A believable example is an
+    invitation to reuse it instead of looking. Placeholder coordinates cannot
+    be mistaken for a real answer, and src/indexer.py drops anything that still
+    matches them.
+
 v4: dropped "state" and redefined "size".
     "state" (open/closed/plugged in) is meaningless for most things a person
     loses - the model confidently reported a phone as "closed" - so it burned
@@ -75,10 +83,10 @@ Return ONLY valid JSON, no markdown fences, no commentary, in exactly this shape
 
 {{"n_objects": 8,
   "objects": [
-    {{"type": "laptop", "color": "blue", "material": "metal", "size": "large",
-      "bbox": [470, 300, 660, 430], "confidence": 0.95}},
-    {{"type": "charger", "color": "white", "material": "plastic", "size": "small",
-      "bbox": [265, 335, 320, 375], "confidence": 0.8}}
+    {{"type": "<noun>", "color": "<colour>", "material": "<material>",
+      "size": "<size>", "bbox": [111, 222, 333, 444], "confidence": 0.9}},
+    {{"type": "<noun>", "color": "<colour>", "material": "<material>",
+      "size": "<size>", "bbox": [555, 666, 777, 888], "confidence": 0.9}}
   ],
   "caption": "one short sentence describing the scene"}}
 

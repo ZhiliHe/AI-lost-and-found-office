@@ -24,11 +24,12 @@ with a hard cap on turns so we can never loop forever.
 """
 
 from dataclasses import dataclass, field
+import re
 
 from .query_parser import parse
 from .retrieval import confidence_band, find_candidates
 from .spatial import VIEW_DEPENDENT
-from .vocab import find_colors, negate
+from .vocab import MATERIALS, SIZES, find_colors, is_negated, negate
 
 # Order matters: we prefer to ask about attributes a human can answer instantly.
 # Removed over two rounds of looking at real output:
@@ -47,6 +48,30 @@ ASKABLE_KEYS = ["color", "size", "material", "location"]
 # they remember what something was made of, so material is discounted.
 # Raise a value here to make the agent ask about that attribute sooner.
 KEY_PRIOR = {"color": 1.3, "size": 0.9, "location": 0.8, "material": 0.7}
+
+# Sentinel for "the pending question is a pick-from-photos", not an attribute.
+PICK_KEY = "__pick__"
+
+# More than this and a gallery stops helping - nobody scans nine photos.
+MAX_TO_SHOW = 4
+
+ORDINALS = ("first", "second", "third", "fourth")
+
+# Openers that mark a sentence as a fresh search rather than an answer.
+QUESTION_OPENERS = ("where", "find", "is there", "show", "which", "what about",
+                    "어디", "찾아")
+
+# Sentinel for "the pending question is a pick-from-photos", not an attribute.
+PICK_KEY = "__pick__"
+
+# More than this and a gallery stops helping - nobody scans nine photos.
+MAX_TO_SHOW = 4
+
+ORDINALS = ("first", "second", "third", "fourth")
+
+# Openers that mark a sentence as a fresh search rather than an answer.
+QUESTION_OPENERS = ("where", "find", "is there", "show", "which", "what about",
+                    "어디", "찾아")
 
 KEY_QUESTIONS = {
     "color": "What colour is it?",
@@ -223,14 +248,28 @@ def describe_place(scene, obj, prefer_anchor=None):
     return find(safe) or find(fallback) or where
 
 
-def describe_object(obj):
-    """"the black bottle". Colour plus type, nothing else.
+def describe_object(obj, candidate=None, wanted=None):
+    """"the blue laptop". Colour plus type, nothing else.
 
     Deliberately short. Every extra adjective is another chance to describe the
     object in a way the owner does not recognise, and the photo we show
     alongside carries far more information than any sentence could.
+
+    USE THE OWNER'S WORD WHEN WE HAVE SEEN IT. The MacBook read as "blue" from
+    the front and "gray" from the side; the vote picked gray, so someone who
+    asked for a blue laptop got the right object described back to them as grey
+    and reasonably concluded it was the wrong one. If the user says blue and
+    some view agrees, we say blue - we have no grounds to correct them.
     """
-    attributes = obj.get("attributes", {})
+    attributes = dict(obj.get("attributes") or {})
+    observed = (candidate or {}).get("observed") or {}
+
+    for key, value in (wanted or {}).items():
+        if not value or isinstance(value, tuple):
+            continue
+        if value in (observed.get(key) or {}):
+            attributes[key] = value
+
     bits = [attributes.get("color"), obj.get("type")]
     return " ".join(b for b in bits if b)
 
@@ -283,6 +322,8 @@ class Session:
         self.asked = []
         self.pending_key = None
         self.pending_options = []
+        self.picked = None
+        self.rejected_shortlist = False
         self.turns = 0
         self.candidates = []
         self.verified_ids = set()      # only pay for each VLM check once
@@ -302,11 +343,86 @@ class Session:
     def reply(self, user_text):
         if self.parsed is None:
             return self.start(user_text)
+        # A new question beats a pending one. Without this, typing "where is my
+        # bottle" while the agent is asking "which laptop is yours?" gets eaten
+        # as a failed answer, and the agent re-runs the OLD laptop search - so
+        # the user asks about a bottle and gets shown laptops.
+        if self._looks_like_a_new_question(user_text):
+            return self.start(user_text)
         if self.pending_key:
             self._apply_answer(user_text)
         return self._advance()
 
+    def _looks_like_a_new_question(self, text):
+        """Is this a fresh search, or an answer to what we just asked?
+
+        Answers are colours, materials, sizes, room names and numbers - none of
+        which name an object. So naming an object is the signal. We still allow
+        "blue bottle" as an answer when we are already looking for a bottle,
+        unless it is phrased as a question.
+        """
+        asked = parse(text, known_locations=self.index.locations())
+        if not asked.target_type:
+            return False
+        if asked.target_type != self.parsed.target_type:
+            return True
+        return text.strip().lower().startswith(QUESTION_OPENERS)
+
     # ------------------------------------------------------------------ #
+    def _ask_to_pick(self):
+        """Words have run out - show the photos and let the user point.
+
+        This is the agent choosing a different ACTION, not a different question.
+        Two laptops that the indexer described identically cannot be separated
+        by anything we could ask; a human glancing at two pictures separates
+        them instantly. Falling back to "they look the same to me, good luck"
+        wastes the one channel that still works.
+        """
+        shortlist = self.candidates[:MAX_TO_SHOW]
+        self.turns += 1
+        self.pending_key = PICK_KEY
+        self.pending_options = [c["object"]["id"] for c in shortlist]
+        return Reply(
+            "choose",
+            f"I found {len(self.candidates)} that I cannot tell apart from their "
+            f"descriptions. Here they are - which one is yours? "
+            f"(1-{len(shortlist)}, or \"none\")",
+            candidates=shortlist,
+            asked_key=PICK_KEY,
+            options=self.pending_options)
+
+    def _pick_from_shortlist(self, text, options):
+        """"2", "the second one", "none". Returns True if the session resolved."""
+        cleaned = text.strip().lower()
+        if cleaned.startswith(("none", "neither", "no ", "없", "아니")):
+            # Not "I cannot tell" - "it is not one of these". Asking again would
+            # show the same photos, so stop and be honest about what we checked.
+            self.rejected_shortlist = True
+            return False
+
+        chosen = None
+        digits = "".join(ch if ch.isdigit() else " " for ch in cleaned).split()
+        if digits:
+            index = int(digits[0]) - 1
+            if 0 <= index < len(options):
+                chosen = options[index]
+        else:
+            for position, word in enumerate(ORDINALS):
+                if word in cleaned and position < len(options):
+                    chosen = options[position]
+                    break
+
+        if chosen:
+            self.picked = chosen
+            return True
+        return False
+
+    def _wanted(self):
+        """Everything the user has actually told us about the object."""
+        merged = dict(self.parsed.attributes if self.parsed else {})
+        merged.update(self.constraints)
+        return merged
+
     def _verify(self):
         """Ask the VLM to look again, if the caller wired one up.
 
@@ -330,17 +446,42 @@ class Session:
             self.verified_ids.add(cand["object"]["id"])
 
         kept = {c["object"]["id"] for c in survivors}
-        # Verification is advisory. Non-selected candidates remain, and selected
-        # candidates survive unless the verifier confidently rejected them.
-        self.candidates = [
-            c for c in self.candidates
-            if c not in fresh or c["object"]["id"] in kept
-        ] or self.candidates
+        self.candidates = [c for c in self.candidates if c["object"]["id"] in kept]
+
+    def _volunteer(self, text, skip):
+        """Grab anything ELSE the user mentioned while answering a question.
+
+        People answer however they feel like: asked about the colour, they say
+        "it's black, and it's made of metal". The metal is real information -
+        take it for the attribute it names even though we did not ask, so it
+        never costs the user a second turn. Deliberately limited to the
+        askable attributes: location stays answer-only (see ASKABLE_KEYS).
+        """
+        if skip != "color" and "color" not in self.constraints:
+            colors = find_colors(text)
+            if colors:
+                self.constraints["color"] = colors[0]
+
+        words = set(re.findall(r"[a-z]+", text))
+        if skip != "size" and "size" not in self.constraints:
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
+                    break
+        if skip != "material" and "material" not in self.constraints:
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    break
 
     def _apply_answer(self, user_text):
         key, options = self.pending_key, self.pending_options
         self.pending_key, self.pending_options = None, []
         self.asked.append(key)
+
+        if key == PICK_KEY:
+            self._pick_from_shortlist(user_text, options)
+            return
 
         text = user_text.strip().lower()
         if key == "confirm_candidate":
@@ -355,13 +496,16 @@ class Session:
                     "몰라", "모르겠어", ""):
             return  # attribute burned, no constraint added
 
-        # Users answer whatever they feel like. If they mention a colour while we
-        # were asking about something else, take it anyway instead of discarding
-        # a perfectly good clue.
-        if key != "color" and "color" not in self.constraints:
-            volunteered = find_colors(text)
-            if volunteered:
-                self.constraints["color"] = volunteered[0]
+        # Users answer whatever they feel like. Take any attribute they mention
+        # that we were NOT asking about, instead of discarding a good clue.
+        self._volunteer(text, skip=key)
+
+        words = set(re.findall(r"[a-z]+", text))
+
+        if key != "location" and not self.parsed.location:
+            room = parse(text, known_locations=self.index.locations()).location
+            if room:
+                self.parsed.location = room
 
         if key == "color":
             colors = find_colors(text)
@@ -379,6 +523,19 @@ class Session:
                 # instead of pretending the answer told us nothing.
                 self.constraints["color"] = colors[0]
             return
+
+        # Accept any KNOWN size/material, not just the values we offered:
+        # "small" is a fine answer to "medium or large?".
+        if key == "size":
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
+                    return
+        if key == "material":
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    return
 
         if key == "location":
             for option in options:
@@ -403,6 +560,26 @@ class Session:
 
     # ------------------------------------------------------------------ #
     def _advance(self):
+        if self.rejected_shortlist:
+            self.rejected_shortlist = False
+            places = sorted({c["scene"].get("location") for c in self.candidates})
+            return Reply(
+                "none_found",
+                f"Then I don't have it. I checked every photo I have of "
+                f"{' and '.join(places)} and those were all the "
+                f"{self.parsed.target_type}s in them.",
+                candidates=[])
+
+        if self.picked:
+            chosen = [c for c in self.candidates if c["object"]["id"] == self.picked]
+            self.picked = None
+            if chosen:
+                cand = chosen[0]
+                return Reply(
+                    "answer",
+                    f"That one is {describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}.",
+                    candidates=chosen)
+
         self.candidates = find_candidates(
             self.index, self.parsed, self.constraints, top_k_scenes=self.top_k_scenes,
             merge_across_views=self.merge_across_views)
@@ -413,19 +590,28 @@ class Session:
 
         if not self.candidates:
             if self.constraints:
-                # We over-filtered. Drop the newest constraint and be honest.
-                dropped = list(self.constraints)[-1]
-                self.constraints.pop(dropped)
-                self.candidates = find_candidates(
-                    self.index, self.parsed, self.constraints,
-                    top_k_scenes=self.top_k_scenes,
-                    merge_across_views=self.merge_across_views)
-                if self.candidates:
-                    return Reply(
-                        "giveup",
-                        f"I couldn't find anything matching that {dropped}. "
-                        f"Here is the closest I have for \"{self.parsed.describe()}\":",
-                        candidates=self.candidates[:3])
+                # We over-filtered. The newest constraint is usually the
+                # culprit (the answer to the last question), but a volunteered
+                # value can be inserted before it - so try dropping constraints
+                # one at a time, newest first, until something survives again.
+                for dropped in reversed(list(self.constraints)):
+                    value = self.constraints[dropped]
+                    trial = dict(self.constraints)
+                    trial.pop(dropped)
+                    refound = find_candidates(
+                        self.index, self.parsed, trial,
+                        top_k_scenes=self.top_k_scenes,
+                        merge_across_views=self.merge_across_views)
+                    if refound:
+                        self.constraints = trial
+                        self.candidates = refound
+                        label = (f"not {value[1]}" if is_negated(value)
+                                 else value)
+                        return Reply(
+                            "giveup",
+                            f"I couldn't find anything matching \"{label}\". "
+                            f"Here is the closest I have for \"{self.parsed.describe()}\":",
+                            candidates=refound[:3])
             return Reply("none_found",
                          describe_not_found(self.parsed, self.index.coverage()))
 

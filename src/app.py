@@ -135,13 +135,13 @@ def render_candidates(candidates, focus=0):
     return image
 
 
-def gallery_for(candidates):
+def gallery_for(candidates, wanted=None):
     """One thumbnail per candidate, across scenes."""
     items = []
     for position, cand in enumerate(candidates[:6]):
         image = render_candidates(candidates, focus=position)
         if image is not None:
-            caption = (f"{describe_object(cand['object'])} - "
+            caption = (f"{describe_object(cand['object'], cand, wanted)} - "
                        f"{describe_place(cand['scene'], cand['object'])}")
             items.append((image, caption))
     return items
@@ -221,7 +221,8 @@ def build():
 
             # Keep the final image visible even if a reply omits candidates.
             shown_candidates = reply.candidates or session.candidates
-            return history, session, gallery_for(shown_candidates), note
+            return history, session, \
+                gallery_for(shown_candidates, session._wanted()), note
 
         def clear():
             return [], None, [], ""

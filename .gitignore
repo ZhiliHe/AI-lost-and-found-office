@@ -12,3 +12,4 @@ data/debug/
 # DO commit data/ground_truth.json - it is the evaluation reference.
 # Images: commit them only if the repo stays small. Otherwise share separately.
 models/
+_to_delete/
