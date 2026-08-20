@@ -37,6 +37,43 @@ class ParsedQuery:
         return text
 
 
+def _squash(text):
+    """Lowercase and throw away everything that is not a letter or digit.
+
+    So "the meeting room", "meeting-room" and "meetingroom" all become the same
+    string, and a folder called "6f_meetingroom" can be matched by someone who
+    simply typed "meeting room".
+    """
+    return "".join(ch for ch in str(text).lower() if ch.isalnum())
+
+
+# Floor prefixes carry no meaning on their own - "7f" must not make a query
+# about the 7th floor match the tearoom.
+_FLOOR_PREFIX = {"1f", "2f", "3f", "4f", "5f", "6f", "7f", "8f", "9f", "10f", "b1", "b2"}
+
+
+def _location_variants(name):
+    """Ways a person might refer to a folder called "7f_tearoom"."""
+    variants = {_squash(name)}
+    for token in str(name).replace("-", "_").split("_"):
+        squashed = _squash(token)
+        if len(squashed) >= 3 and squashed not in _FLOOR_PREFIX:
+            variants.add(squashed)
+    return {v for v in variants if len(v) >= 3}
+
+
+def _find_location(text, known_locations):
+    """Longest match wins, so "8f_lobbytable" beats a stray "table"."""
+    squashed_query = _squash(text)
+    best = None
+    for name in known_locations:
+        for variant in _location_variants(name):
+            if variant in squashed_query:
+                if best is None or len(variant) > best[0]:
+                    best = (len(variant), name)
+    return best[1] if best else None
+
+
 # locations are just the folder names under data/images
 def parse(text, known_locations=()):
     predicate, phrase = find_predicate(text)
@@ -64,12 +101,7 @@ def parse(text, known_locations=()):
     # colours mentioned before the relation word describe the target
     colors = find_colors(left if phrase else text)
 
-    location = None
-    lowered = text.lower()
-    for name in known_locations:
-        if name.lower() in lowered:
-            location = name
-            break
+    location = _find_location(text, known_locations)
 
     attributes = {}
     if colors:

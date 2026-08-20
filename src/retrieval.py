@@ -162,13 +162,30 @@ def merge_views(candidates):
 
     groups = {}
     for cand in candidates:
-        key = (cand["scene"].get("location"), cand["object"].get("type"))
+        key = (cand["scene"].get("location"),
+               _merge_group(cand["object"].get("type")))
         groups.setdefault(key, []).append(cand)
 
     merged = []
     for items in groups.values():
         merged.extend(_merge_one_group(items))
     return merged
+
+
+def _merge_group(obj_type):
+    """The key objects are merged under.
+
+    NOT the raw type. The model called the same tall lululemon bottle a "mug"
+    from the front and a "bottle" from the left, and a key of (location, type)
+    means those two observations never even meet - so one bottle becomes two.
+    Types the model demonstrably confuses are already listed in
+    vocab.FUZZY_TYPE_GROUPS; we merge across the whole group and let the
+    majority vote decide what to call the result.
+    """
+    for group in FUZZY_TYPE_GROUPS:
+        if obj_type in group:
+            return frozenset(group)
+    return obj_type
 
 
 def _merge_one_group(items):
@@ -189,9 +206,15 @@ def _merge_one_group(items):
     canonical = []
     for cand in by_scene[reference_id]:
         entry = dict(cand)
+        weight = _view_quality(cand)
         entry["seen_in"] = [reference_id]
-        entry["observed"] = {k: [v] for k, v in
+        # value -> how much evidence there is for it. A view that saw the object
+        # large and confidently gets more say than one that saw a smudge at the
+        # edge of frame. With only two views a plain count ties constantly, and
+        # the tie was being broken arbitrarily.
+        entry["observed"] = {k: {v: weight} for k, v in
                              (cand["object"].get("attributes") or {}).items() if v}
+        entry["observed_types"] = {cand["object"].get("type"): weight}
         canonical.append(entry)
 
     for scene_id, others in by_scene.items():
@@ -203,7 +226,11 @@ def _merge_one_group(items):
         attributes = dict(entry["object"].get("attributes") or {})
         for key, values in entry["observed"].items():
             attributes[key] = _majority(values)
-        entry["object"] = {**entry["object"], "attributes": attributes}
+        obj = {**entry["object"], "attributes": attributes}
+        # the type is voted on too - see _merge_group
+        if entry.get("observed_types"):
+            obj["type"] = _majority(entry["observed_types"])
+        entry["object"] = obj
     return canonical
 
 
@@ -224,15 +251,20 @@ def _absorb(canonical, others, scene_id):
 
         canon, other = canonical[canon_index], others[other_index]
         canon["seen_in"].append(scene_id)
+        weight = _view_quality(other)
+        other_type = other["object"].get("type")
+        canon["observed_types"][other_type] = \
+            canon["observed_types"].get(other_type, 0.0) + weight
         for key, value in (other["object"].get("attributes") or {}).items():
             if value:
-                canon["observed"].setdefault(key, []).append(value)
+                bucket = canon["observed"].setdefault(key, {})
+                bucket[value] = bucket.get(value, 0.0) + weight
         # If this angle shows the object more clearly, display THAT photo -
         # but keep the accumulated votes and history.
         if _view_quality(other) > _view_quality(canon):
-            seen, observed = canon["seen_in"], canon["observed"]
+            keep = (canon["seen_in"], canon["observed"], canon["observed_types"])
             canon.update(other)
-            canon["seen_in"], canon["observed"] = seen, observed
+            canon["seen_in"], canon["observed"], canon["observed_types"] = keep
 
 
 def _similarity(a, b):
@@ -247,11 +279,9 @@ def _similarity(a, b):
     return score
 
 
-def _majority(values):
-    counts = {}
-    for value in values:
-        counts[value] = counts.get(value, 0) + 1
-    return max(counts, key=lambda v: (counts[v], values.index(v) * -1))
+def _majority(weighted):
+    """The value with the most evidence behind it. `weighted` is value -> weight."""
+    return max(weighted, key=lambda value: weighted[value])
 
 
 def _satisfies(cand, wanted):

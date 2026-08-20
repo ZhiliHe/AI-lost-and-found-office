@@ -7,7 +7,7 @@ vlm:
   #   transformers -> CUDA / CPU, via HuggingFace transformers
   #   dummy        -> no model needed, returns canned output (for development)
   backend: mlx
-  model: mlx-community/Qwen3-VL-2B-Instruct-4bit
+  model: models/Qwen3-VL-2B-Instruct-4bit
   # Each object costs ~120 tokens, so 15 objects needs ~1800. 3072 is ample for
   # any real desk.
   #
@@ -26,6 +26,20 @@ vlm:
   # missed them. 1280 is the compromise. Raise it if small objects are still
   # being missed, and watch memory.
   max_image_side: 1280
+
+  # Tiling: 0 = off, 2 = run a 2x2 grid of overlapping crops in ADDITION to
+  # the full photo, 3 = a 3x3 grid.
+  #
+  # Why: max_image_side shrinks a 4032px photo to 1280, which turns a USB stick
+  # into 38 pixels - and a 2B model does not see 38 pixels. A tile is cropped
+  # from the ORIGINAL image, so the same object arrives several times larger.
+  # On our office desk the full pass alone found 8 of ~18 objects, and every
+  # miss was small or near an edge.
+  #
+  # Cost: 1 pass becomes 5 (or 10 for a 3x3), so ~4 minutes per photo instead
+  # of ~45 seconds. Leave it off while iterating; turn it on for the final
+  # index. See src/tiling.py for how overlap stops objects being cut in half.
+  tiling: 2
 
   # How the model reports bounding boxes.
   #   norm1000     -> coordinates normalised to 0..1000 (we ASK for this in the prompt)

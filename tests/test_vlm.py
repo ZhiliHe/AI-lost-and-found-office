@@ -68,3 +68,33 @@ def test_empty_response_raises():
 def test_unparseable_response_raises():
     with pytest.raises(VLMError):
         extract_json("I'm sorry, I cannot help with that.")
+
+
+# --- the model copying the prompt's example ---------------------------------
+
+def test_prompt_example_objects_are_dropped():
+    """A 2B model under pressure hands back the prompt's example instead of
+    looking. Caught on a real desk photo: it returned the example laptop and
+    charger, to the pixel, as two of eight "found" objects."""
+    from src.indexer import _is_prompt_echo, PROMPT_EXAMPLE_BOXES
+
+    resized = (1000, 1000)
+    for box in PROMPT_EXAMPLE_BOXES:
+        echoed = {"bbox": [float(v) for v in box]}
+        assert _is_prompt_echo(echoed, resized), box
+
+    real = {"bbox": [100.0, 150.0, 260.0, 400.0]}
+    assert not _is_prompt_echo(real, resized)
+
+
+def test_prompt_example_uses_unmistakable_placeholders():
+    """If the example ever goes back to plausible values, the echo filter stops
+    working silently - so assert the two stay in sync."""
+    from src.prompts import SCENE_EXTRACTION_PROMPT
+    from src.indexer import PROMPT_EXAMPLE_BOXES
+
+    for box in PROMPT_EXAMPLE_BOXES:
+        rendered = "[" + ", ".join(str(v) for v in box) + "]"
+        assert rendered in SCENE_EXTRACTION_PROMPT, rendered
+    # and the example must not look like a real answer
+    assert "<noun>" in SCENE_EXTRACTION_PROMPT

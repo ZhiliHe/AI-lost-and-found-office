@@ -54,6 +54,27 @@ OBJECT_SYNONYMS = {
     "watch":      ["watch", "smartwatch"],
 }
 
+# Fixtures. The prompt already says to ignore furniture, but a 2B model still
+# reported a sink, a faucet, a water cooler and an ice maker in the tea room.
+# Nobody loses a sink, so these are dropped at index time - they only waste
+# detection slots and clutter the candidate list.
+NOT_PORTABLE = {
+    # room fixtures the tea room and lobby shots turned up
+    "sink", "faucet", "tap", "water cooler", "ice maker", "fridge",
+    "refrigerator", "microwave", "kettle", "plant", "pot plant", "radiator",
+    "air conditioner", "lamp", "light", "clock", "mirror", "painting",
+    "picture", "curtain", "blind", "door", "window", "wall", "floor",
+    "ceiling", "desk", "table", "chair", "sofa", "shelf", "cabinet",
+    "drawer", "monitor", "screen", "printer", "television", "tv",
+    # supplied by the building, not brought by a person
+    "hair dryer", "hairdryer", "towel", "soap", "tissue", "bin", "trash can",
+}
+
+
+def is_portable(obj_type):
+    """Could a person pick this up and walk off with it?"""
+    return str(obj_type or "").strip().lower() not in NOT_PORTABLE
+
 # Categories a small VLM genuinely mixes up. A query for one member matches any
 # member of the group, and the agent then asks which one the user meant.
 # Discovered from real output: Qwen3-VL-2B labelled a tall water bottle a "mug".

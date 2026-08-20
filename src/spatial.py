@@ -167,12 +167,31 @@ PREDICATE_SYNONYMS = {
 }
 
 
+# How many neighbours each object keeps a relation to.
+#
+# Without a cap this is quadratic: 20 objects on a desk produced 500 triples,
+# 216 of them "near". That is not just a big file - it is WRONG. "the bottle
+# next to the laptop" matched a bottle on the far side of the desk, because
+# everything on one desk is "near" everything else.
+#
+# Nobody describes a lost item by an anchor that is not its closest neighbour,
+# so keeping the nearest few is both smaller and more accurate.
+MAX_NEIGHBOURS = 4
+
+# A more specific relation makes the vaguer one redundant: if the book is ON
+# the table we do not also need "book near table".
+_IMPLIES_NEAR = ("on", "inside", "beside")
+
+
 def compute_relations(objects, image_wh):
     """objects: list of dicts with 'id' and 'bbox'.
     Returns a list of {subject, predicate, object} triples.
 
     Runs at INDEX time, so the result is baked into scene_index.json and the
     query path never recomputes geometry.
+
+    Only each object's nearest MAX_NEIGHBOURS get relations - see the note
+    above for why that is a correctness fix, not just a size one.
     """
     boxes = {}
     for obj in objects:
@@ -183,16 +202,20 @@ def compute_relations(objects, image_wh):
 
     triples = []
     ids = list(boxes)
-    for i, sid in enumerate(ids):
-        for j, oid in enumerate(ids):
-            if i == j:
-                continue
-            a, b = boxes[sid], boxes[oid]
+    for sid in ids:
+        a = boxes[sid]
+        neighbours = sorted((oid for oid in ids if oid != sid),
+                            key=lambda oid: center_distance(a, boxes[oid]))
+        for oid in neighbours[:MAX_NEIGHBOURS]:
+            b = boxes[oid]
+            found = []
             for pred, fn in _BINARY.items():
                 if fn(a, b):
-                    triples.append({"subject": sid, "predicate": pred, "object": oid})
-            if is_near(a, b, image_wh):
-                triples.append({"subject": sid, "predicate": "near", "object": oid})
+                    found.append(pred)
+            if is_near(a, b, image_wh) and not any(p in found for p in _IMPLIES_NEAR):
+                found.append("near")
+            for pred in found:
+                triples.append({"subject": sid, "predicate": pred, "object": oid})
     return triples
 
 

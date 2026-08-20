@@ -50,6 +50,18 @@ ASKABLE_KEYS = ["color", "location", "size", "material"]
 # Raise a value here to make the agent ask about that attribute sooner.
 KEY_PRIOR = {"color": 1.3, "location": 1.2, "size": 0.9, "material": 0.7}
 
+# Sentinel for "the pending question is a pick-from-photos", not an attribute.
+PICK_KEY = "__pick__"
+
+# More than this and a gallery stops helping - nobody scans nine photos.
+MAX_TO_SHOW = 4
+
+ORDINALS = ("first", "second", "third", "fourth")
+
+# Openers that mark a sentence as a fresh search rather than an answer.
+QUESTION_OPENERS = ("where", "find", "is there", "show", "which", "what about",
+                    "어디", "찾아")
+
 KEY_QUESTIONS = {
     "color": "What colour is it?",
     "location": "Which room was it in?",
@@ -166,14 +178,28 @@ def describe_place(scene, obj, prefer_anchor=None):
     return find(safe) or find(fallback) or where
 
 
-def describe_object(obj):
-    """"the black bottle". Colour plus type, nothing else.
+def describe_object(obj, candidate=None, wanted=None):
+    """"the blue laptop". Colour plus type, nothing else.
 
     Deliberately short. Every extra adjective is another chance to describe the
     object in a way the owner does not recognise, and the photo we show
     alongside carries far more information than any sentence could.
+
+    USE THE OWNER'S WORD WHEN WE HAVE SEEN IT. The MacBook read as "blue" from
+    the front and "gray" from the side; the vote picked gray, so someone who
+    asked for a blue laptop got the right object described back to them as grey
+    and reasonably concluded it was the wrong one. If the user says blue and
+    some view agrees, we say blue - we have no grounds to correct them.
     """
-    attributes = obj.get("attributes", {})
+    attributes = dict(obj.get("attributes") or {})
+    observed = (candidate or {}).get("observed") or {}
+
+    for key, value in (wanted or {}).items():
+        if not value or isinstance(value, tuple):
+            continue
+        if value in (observed.get(key) or {}):
+            attributes[key] = value
+
     bits = [attributes.get("color"), obj.get("type")]
     return " ".join(b for b in bits if b)
 
@@ -199,6 +225,8 @@ class Session:
         self.asked = []
         self.pending_key = None
         self.pending_options = []
+        self.picked = None
+        self.rejected_shortlist = False
         self.turns = 0
         self.candidates = []
         self.verified_ids = set()      # only pay for each VLM check once
@@ -216,11 +244,86 @@ class Session:
     def reply(self, user_text):
         if self.parsed is None:
             return self.start(user_text)
+        # A new question beats a pending one. Without this, typing "where is my
+        # bottle" while the agent is asking "which laptop is yours?" gets eaten
+        # as a failed answer, and the agent re-runs the OLD laptop search - so
+        # the user asks about a bottle and gets shown laptops.
+        if self._looks_like_a_new_question(user_text):
+            return self.start(user_text)
         if self.pending_key:
             self._apply_answer(user_text)
         return self._advance()
 
+    def _looks_like_a_new_question(self, text):
+        """Is this a fresh search, or an answer to what we just asked?
+
+        Answers are colours, materials, sizes, room names and numbers - none of
+        which name an object. So naming an object is the signal. We still allow
+        "blue bottle" as an answer when we are already looking for a bottle,
+        unless it is phrased as a question.
+        """
+        asked = parse(text, known_locations=self.index.locations())
+        if not asked.target_type:
+            return False
+        if asked.target_type != self.parsed.target_type:
+            return True
+        return text.strip().lower().startswith(QUESTION_OPENERS)
+
     # ------------------------------------------------------------------ #
+    def _ask_to_pick(self):
+        """Words have run out - show the photos and let the user point.
+
+        This is the agent choosing a different ACTION, not a different question.
+        Two laptops that the indexer described identically cannot be separated
+        by anything we could ask; a human glancing at two pictures separates
+        them instantly. Falling back to "they look the same to me, good luck"
+        wastes the one channel that still works.
+        """
+        shortlist = self.candidates[:MAX_TO_SHOW]
+        self.turns += 1
+        self.pending_key = PICK_KEY
+        self.pending_options = [c["object"]["id"] for c in shortlist]
+        return Reply(
+            "choose",
+            f"I found {len(self.candidates)} that I cannot tell apart from their "
+            f"descriptions. Here they are - which one is yours? "
+            f"(1-{len(shortlist)}, or \"none\")",
+            candidates=shortlist,
+            asked_key=PICK_KEY,
+            options=self.pending_options)
+
+    def _pick_from_shortlist(self, text, options):
+        """"2", "the second one", "none". Returns True if the session resolved."""
+        cleaned = text.strip().lower()
+        if cleaned.startswith(("none", "neither", "no ", "없", "아니")):
+            # Not "I cannot tell" - "it is not one of these". Asking again would
+            # show the same photos, so stop and be honest about what we checked.
+            self.rejected_shortlist = True
+            return False
+
+        chosen = None
+        digits = "".join(ch if ch.isdigit() else " " for ch in cleaned).split()
+        if digits:
+            index = int(digits[0]) - 1
+            if 0 <= index < len(options):
+                chosen = options[index]
+        else:
+            for position, word in enumerate(ORDINALS):
+                if word in cleaned and position < len(options):
+                    chosen = options[position]
+                    break
+
+        if chosen:
+            self.picked = chosen
+            return True
+        return False
+
+    def _wanted(self):
+        """Everything the user has actually told us about the object."""
+        merged = dict(self.parsed.attributes if self.parsed else {})
+        merged.update(self.constraints)
+        return merged
+
     def _verify(self):
         """Ask the VLM to look again, if the caller wired one up.
 
@@ -249,18 +352,27 @@ class Session:
         self.pending_key, self.pending_options = None, []
         self.asked.append(key)
 
+        if key == PICK_KEY:
+            self._pick_from_shortlist(user_text, options)
+            return
+
         text = user_text.strip().lower()
         if text in ("i don't know", "dont know", "no idea", "not sure", "idk",
                     "몰라", "모르겠어", ""):
             return  # attribute burned, no constraint added
 
-        # Users answer whatever they feel like. If they mention a colour while we
-        # were asking about something else, take it anyway instead of discarding
-        # a perfectly good clue.
+        # Users answer whatever they feel like. If they mention a colour or a
+        # room while we were asking about something else, take it anyway instead
+        # of discarding a perfectly good clue.
         if key != "color" and "color" not in self.constraints:
             volunteered = find_colors(text)
             if volunteered:
                 self.constraints["color"] = volunteered[0]
+
+        if key != "location" and not self.parsed.location:
+            room = parse(text, known_locations=self.index.locations()).location
+            if room:
+                self.parsed.location = room
 
         if key == "color":
             colors = find_colors(text)
@@ -302,6 +414,26 @@ class Session:
 
     # ------------------------------------------------------------------ #
     def _advance(self):
+        if self.rejected_shortlist:
+            self.rejected_shortlist = False
+            places = sorted({c["scene"].get("location") for c in self.candidates})
+            return Reply(
+                "none_found",
+                f"Then I don't have it. I checked every photo I have of "
+                f"{' and '.join(places)} and those were all the "
+                f"{self.parsed.target_type}s in them.",
+                candidates=[])
+
+        if self.picked:
+            chosen = [c for c in self.candidates if c["object"]["id"] == self.picked]
+            self.picked = None
+            if chosen:
+                cand = chosen[0]
+                return Reply(
+                    "answer",
+                    f"That one is {describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}.",
+                    candidates=chosen)
+
         self.candidates = find_candidates(
             self.index, self.parsed, self.constraints, top_k_scenes=self.top_k_scenes,
             merge_across_views=self.merge_across_views)
@@ -329,7 +461,7 @@ class Session:
             cand = self.candidates[0]
             return Reply(
                 "answer",
-                f"Found it - the {describe_object(cand['object'])} is "
+                f"Found it - the {describe_object(cand['object'], cand, self._wanted())} is "
                 f"{describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}.",
                 candidates=self.candidates)
 
@@ -342,11 +474,7 @@ class Session:
 
         key, options = choose_question(self.candidates, self.asked)
         if key is None:
-            return Reply(
-                "giveup",
-                f"I found {len(self.candidates)} of them and they look the same to me. "
-                f"Here they are:",
-                candidates=self.candidates[:3])
+            return self._ask_to_pick()
 
         self.turns += 1
         self.pending_key, self.pending_options = key, options

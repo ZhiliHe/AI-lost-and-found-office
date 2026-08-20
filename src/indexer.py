@@ -19,11 +19,13 @@ from pathlib import Path
 
 from PIL import Image
 
-from .config import load_config
+from .config import PROJECT_ROOT, load_config
 from .prompts import SCENE_EXTRACTION_PROMPT
 from .spatial import compute_relations, deduplicate
+from .tiling import (crop_tile, is_truncated, make_tiles, merge_passes,
+                     relative_size, tile_to_global)
 from .vlm import VLMError, extract_json, load_backend
-from .vocab import normalize_color, normalize_object_type
+from .vocab import is_portable, normalize_color, normalize_object_type
 
 IMAGE_SUFFIXES = {".jpg", ".jpeg", ".png", ".webp", ".heic"}
 
@@ -97,6 +99,27 @@ def to_original_pixels(bbox, coord_mode, resized_wh, original_wh):
     return [round(x1, 1), round(y1, 1), round(x2, 1), round(y2, 1)]
 
 
+# Boxes that appear in the prompt's example. A 2B model under pressure will
+# copy the example instead of looking at the photo - we caught it returning the
+# example laptop and charger, to the pixel, as two of eight "found" objects.
+# The example now uses these placeholder coordinates precisely so that a copy is
+# recognisable. Anything matching them never came from the image.
+PROMPT_EXAMPLE_BOXES = [(111, 222, 333, 444), (555, 666, 777, 888)]
+ECHO_TOLERANCE = 2.0
+
+
+def _is_prompt_echo(obj, resized_wh):
+    """Did the model hand us back the example instead of an observation?"""
+    x1, y1, x2, y2 = obj["bbox"]
+    width, height = resized_wh
+    for example in PROMPT_EXAMPLE_BOXES:
+        ex1, ey1, ex2, ey2 = [v / 1000.0 for v in example]
+        want = (ex1 * width, ey1 * height, ex2 * width, ey2 * height)
+        if all(abs(a - b) <= ECHO_TOLERANCE for a, b in zip((x1, y1, x2, y2), want)):
+            return True
+    return False
+
+
 def clean_object(raw, scene_id, position, coord_mode, resized_wh, original_wh):
     """Normalise one object dict from the model. Returns None if unusable."""
     bbox = raw.get("bbox")
@@ -128,24 +151,17 @@ def clean_object(raw, scene_id, position, coord_mode, resized_wh, original_wh):
     }
 
 
-def index_one(backend, image_path, location, cfg):
-    vlm_cfg = cfg["vlm"]
-    scene_id = make_scene_id(location, image_path)
-    model_path, resized_wh, original_wh = prepare_image(
-        image_path, vlm_cfg.get("max_image_side", 1024), cfg["paths"]["debug"])
-
+def _run_pass(backend, model_path, scene_id, position_offset, vlm_cfg,
+              resized_wh, original_wh, label, debug_dir):
+    """One model call. Returns cleaned objects in ORIGINAL image pixels."""
     raw_text = backend.describe(model_path, SCENE_EXTRACTION_PROMPT)
 
     # Always keep the model's raw answer. When recall is bad you need to know
     # whether the model said little, or said a lot and our parser dropped it.
-    debug_dir = Path(cfg["paths"]["debug"])
-    debug_dir.mkdir(parents=True, exist_ok=True)
-    (debug_dir / f"{scene_id}_raw.txt").write_text(raw_text or "", encoding="utf-8")
-
+    (debug_dir / f"{scene_id}_{label}_raw.txt").write_text(raw_text or "",
+                                                          encoding="utf-8")
     parsed = extract_json(raw_text)
 
-    # The prompt asks the model to count first. If the count and the list
-    # disagree, the model ran out of steam - worth seeing.
     if parsed.get("truncated"):
         print("(output was cut off - salvaged what was complete; "
               "raise vlm.max_tokens) ", end="")
@@ -156,10 +172,87 @@ def index_one(backend, image_path, location, cfg):
 
     objects = []
     for position, raw in enumerate(parsed.get("objects", [])):
-        obj = clean_object(raw, scene_id, position, vlm_cfg.get("coord_mode", "norm1000"),
+        obj = clean_object(raw, scene_id, position_offset + position,
+                           vlm_cfg.get("coord_mode", "norm1000"),
                            resized_wh, original_wh)
         if obj:
             objects.append(obj)
+
+    before = len(objects)
+    objects = [o for o in objects if not _is_prompt_echo(o, resized_wh)]
+    if len(objects) < before:
+        print(f"(dropped {before - len(objects)} copied from the prompt) ", end="")
+    return objects, parsed.get("caption")
+
+
+def _repo_relative(image_path):
+    """Store "data/images/office/front.jpg", never "/Users/someone/...".
+
+    The index is committed to git and shared - it IS the contract between
+    teammates. An absolute path bakes in one person's home directory, so every
+    photo becomes unopenable the moment anyone else clones the repo. Paths are
+    written relative to the project root, POSIX-style, on every platform.
+    """
+    path = Path(image_path).resolve()
+    try:
+        return path.relative_to(PROJECT_ROOT).as_posix()
+    except ValueError:
+        # photo lives outside the repo - nothing better than the absolute path
+        return path.as_posix()
+
+
+def index_one(backend, image_path, location, cfg):
+    vlm_cfg = cfg["vlm"]
+    scene_id = make_scene_id(location, image_path)
+    max_side = vlm_cfg.get("max_image_side", 1024)
+    debug_dir = Path(cfg["paths"]["debug"])
+    debug_dir.mkdir(parents=True, exist_ok=True)
+
+    model_path, resized_wh, original_wh = prepare_image(
+        image_path, max_side, cfg["paths"]["debug"])
+
+    # Pass 1: the whole photo. Reliable for anything big.
+    found, caption = _run_pass(backend, model_path, scene_id, 0, vlm_cfg,
+                               resized_wh, original_wh, "full", debug_dir)
+    detections = [(obj, relative_size(obj["bbox"], original_wh)) for obj in found]
+
+    # Passes 2..N: overlapping crops of the ORIGINAL image, so small objects
+    # arrive at the model several times larger. See src/tiling.py.
+    grid = int(vlm_cfg.get("tiling", 0) or 0)
+    if grid >= 2:
+        tiles = make_tiles(original_wh[0], original_wh[1], grid=grid)
+        print(f"\n      + {len(tiles)} tiles ", end="", flush=True)
+        for number, tile in enumerate(tiles):
+            tile_path = debug_dir / f"tile_{scene_id}_{number}.jpg"
+            crop_tile(image_path, tile, tile_path)
+            tile_wh = (tile[2] - tile[0], tile[3] - tile[1])
+            tile_model_path, tile_resized_wh, _ = prepare_image(
+                tile_path, max_side, cfg["paths"]["debug"])
+
+            tile_objects, _ = _run_pass(
+                backend, tile_model_path, scene_id, 1000 * (number + 1), vlm_cfg,
+                tile_resized_wh, tile_wh, f"tile{number}", debug_dir)
+
+            cut = 0
+            for obj in tile_objects:
+                size = relative_size(obj["bbox"], tile_wh)
+                obj["bbox"] = tile_to_global(obj["bbox"], tile)
+                if is_truncated(obj["bbox"], tile, original_wh):
+                    cut += 1
+                    continue
+                detections.append((obj, size))
+            print(f"[{number}:{len(tile_objects) - cut}]", end="", flush=True)
+        print(" ", end="")
+
+    before = len(detections)
+    objects = merge_passes(detections)
+    if grid >= 2:
+        print(f"(merged {before} detections -> {len(objects)}) ", end="")
+
+    before = len(objects)
+    objects = [o for o in objects if is_portable(o["type"])]
+    if len(objects) < before:
+        print(f"(dropped {before - len(objects)} fixtures) ", end="")
 
     before = len(objects)
     objects = deduplicate(objects)
@@ -172,10 +265,10 @@ def index_one(backend, image_path, location, cfg):
     return {
         "scene_id": scene_id,
         "location": location,
-        "image_path": str(Path(image_path).as_posix()),
+        "image_path": _repo_relative(image_path),
         "width": original_wh[0],
         "height": original_wh[1],
-        "caption": str(parsed.get("caption", "")).strip(),
+        "caption": str(caption or "").strip(),
         "objects": objects,
         "relations": compute_relations(objects, original_wh),
     }

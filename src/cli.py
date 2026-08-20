@@ -37,11 +37,15 @@ def open_file(path):
         pass
 
 
-def show(reply, verbose=False):
+def show(reply, verbose=False, wanted=None):
     print(f"\nAgent: {reply.text}")
-    if reply.kind in ("giveup", "none_found") and reply.candidates:
+    if reply.kind == "choose":
         for position, cand in enumerate(reply.candidates, 1):
-            print(f"   {position}. {describe_object(cand['object'])} "
+            print(f"   {position}. {describe_object(cand['object'], cand, wanted)} "
+                  f"- {describe_place(cand['scene'], cand['object'])}")
+    elif reply.kind in ("giveup", "none_found") and reply.candidates:
+        for position, cand in enumerate(reply.candidates, 1):
+            print(f"   {position}. {describe_object(cand['object'], cand, wanted)} "
                   f"- {describe_place(cand['scene'], cand['object'])} "
                   f"[{cand['scene']['image_path']}]")
     elif reply.kind == "answer" and reply.candidates:
@@ -76,6 +80,7 @@ def main():
     print(f"Loaded {len(index.scenes)} scenes from {len(index.locations())} locations: "
           f"{', '.join(index.locations())}")
 
+    shown_already = set()
     verifier = None
     if args.verify:
         cfg.setdefault("agent", {})["verify_with_vlm"] = True
@@ -103,15 +108,27 @@ def main():
         if user_text.lower() in ("quit", "exit", "q"):
             break
 
+        was_fresh = not session.pending_key
         reply = (session.reply(user_text) if session.pending_key
                  else session.start(user_text))
-        show(reply, args.verbose)
+        if was_fresh or reply.kind == "none_found":
+            shown_already.clear()
+        show(reply, args.verbose, session._wanted())
 
         # Draw the result and pop it open - the visual half of the deliverable,
         # without needing a web UI.
-        if not args.no_images and reply.candidates and reply.kind != "question":
+        # "choose" needs EVERY photo on screen at once - that is the whole point.
+        # Only open photos we have not already put on screen. Re-opening the
+        # same shortlist every time an answer fails to parse buries the user in
+        # windows - which is exactly what happened.
+        signature = (reply.kind, tuple(c["object"]["id"] for c in reply.candidates))
+        if not args.no_images and reply.candidates and reply.kind != "question" \
+                and signature not in shown_already:
+            shown_already.add(signature)
             project_root = Path(cfg["paths"]["index"]).parent.parent
-            for position in range(min(3, len(reply.candidates))):
+            how_many = len(reply.candidates) if reply.kind == "choose" \
+                else min(3, len(reply.candidates))
+            for position in range(how_many):
                 out = render_result(reply.candidates, cfg["paths"]["debug"],
                                     project_root, focus=position)
                 if out:
