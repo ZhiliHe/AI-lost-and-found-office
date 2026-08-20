@@ -171,14 +171,18 @@ def test_unindexed_photo_count_finds_photos_never_indexed(tmp_path):
     assert set(missing) == {"office/office_table_01.jpg", "Home/home_desk_01.jpg"}
 
 
-def test_describe_not_found_names_unindexed_photos():
+def test_describe_not_found_does_not_expose_unindexed_photo_details():
+    """The count/filenames from unindexed_photo_count() are internal indexing
+    state, not something to surface to someone searching for their item -
+    the reply stays the same generic hedge either way."""
     from src.agent import describe_not_found
     from src.query_parser import parse
 
     parsed = parse("where is my bottle")
     text = describe_not_found(parsed, scene_count=2, unindexed=(3, ["Home/a.jpg", "Home/b.jpg", "office/c.jpg"]))
-    assert "3 unindexed photos" in text
-    assert "Home/a.jpg" in text
+    assert "3" not in text
+    assert "Home/a.jpg" not in text
+    assert "outside the photographed area" in text
 
 
 def test_describe_not_found_says_search_was_exhaustive_when_nothing_is_missing():
@@ -205,9 +209,10 @@ def test_describe_not_found_stays_vague_when_unindexed_is_unknown():
     assert "unindexed" not in text
 
 
-def test_session_reports_unindexed_photos_end_to_end(tmp_path):
-    """Session wires images_root from config.paths.images through to the
-    not-found message automatically."""
+def test_session_not_found_reply_omits_unindexed_photo_details(tmp_path):
+    """Session wires images_root from config.paths.images through to
+    unindexed_photo_count(), but the reply text must not leak which files
+    on disk are unindexed - that's internal state, not user-facing."""
     from src.retrieval import SceneIndex
 
     images_root = _project_layout(tmp_path)
@@ -223,7 +228,7 @@ def test_session_reports_unindexed_photos_end_to_end(tmp_path):
            "paths": {"images": str(images_root)}}
     reply = Session(idx, cfg).start("where is my skateboard")
     assert reply.kind == "none_found"
-    assert "office_table_01.jpg" in reply.text
+    assert "office_table_01.jpg" not in reply.text
 
 
 def test_no_object_named_asks_for_the_object(index, config):

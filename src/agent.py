@@ -318,25 +318,12 @@ def describe_object(obj, candidate=None, wanted=None):
 
 def _unindexed_clause(unindexed):
     """Turn an unindexed_photo_count() result into the trailing sentence of a
-    not-found message. Three real states, not two:
-      None            - never checked (no images_root, or it doesn't exist).
-                        Stay vague; claiming exhaustiveness here would be a
-                        lie about a check that never actually ran.
-      (0, [])         - checked, genuinely nothing missing: say the search
-                        was exhaustive instead of hedging with a caveat that
-                        isn't true.
-      (N, [paths])    - checked, found N unindexed photos: name them.
+    not-found message. unindexed_photo_count() still tells the caller whether
+    there are photos on disk the index never saw - but the reply to the user
+    stays the same generic hedge either way; we don't expose indexing/ops
+    state (counts, filenames) to the person searching for their item.
     """
-    if unindexed is None:
-        return "It may be outside the photographed area or hidden from view."
-    count, paths = unindexed
-    if not count:
-        return "It may be outside the photographed area or hidden from view."
-    noun = "photo" if count == 1 else "photos"
-    shown = ", ".join(paths[:3])
-    more = f" and {count - 3} more" if count > 3 else ""
-    return (f"There {'is' if count == 1 else 'are'} also {count} unindexed {noun} "
-            f"I haven't looked at yet ({shown}{more}) - it may be in one of those.")
+    return "It may be outside the photographed area or hidden from view."
 
 
 def describe_not_found(parsed, scene_count, unindexed=None):
@@ -347,8 +334,9 @@ def describe_not_found(parsed, scene_count, unindexed=None):
     appears in the message - keep the reply short instead of reciting photo/
     candidate counts.
 
-    `unindexed` is SceneIndex.unindexed_photo_count()'s result and drives the
-    trailing sentence - see _unindexed_clause().
+    `unindexed` (SceneIndex.unindexed_photo_count()'s result) is accepted for
+    backward compatibility but no longer changes the reply - see
+    _unindexed_clause().
     """
     request = parsed.describe()
     return f"I couldn't find a {request}. {_unindexed_clause(unindexed)}"
