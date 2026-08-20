@@ -56,3 +56,12 @@ def test_object_synonyms_normalise():
 def test_find_helpers_handle_plurals():
     assert "bottle" in find_object_types("I see two bottles here")
     assert "black" in find_colors("a black and blue bag")
+
+
+def test_parse_handles_typos_and_descriptive_sentences():
+    q = parse("I think I left my dark grey botle nxt to the labtop")
+    assert q.target_type == "bottle"
+    assert q.attributes["color"] == "black"
+    assert q.predicate == "beside"
+    assert q.anchor_type == "laptop"
+

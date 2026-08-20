@@ -19,6 +19,7 @@ sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 from src.agent import Session          # noqa: E402
 from src.config import load_config     # noqa: E402
 from src.retrieval import SceneIndex   # noqa: E402
+from src.query_parser import parse     # noqa: E402
 
 
 def find_target(index, object_id):
@@ -90,10 +91,18 @@ def run_case(index, cfg, case):
     # genuinely ambiguous. This is the metric that separates us from top-1 retrieval.
     false_answer = (case.get("difficulty") == "ambiguous"
                     and asked == 0 and reply.kind == "answer")
+    parsed = parse(case["query"], known_locations=index.locations())
+    parse_ok = parsed.target_type is not None
+    transparent_not_found = reply.kind != "none_found" or "indexed data" in reply.text
+    confidence_ok = reply.kind != "answer" or getattr(reply, "confidence", None) in (
+        "high", "medium")
+    comparison_ok = reply.kind != "question" or "Candidate " in reply.text
 
     return {"id": case["id"], "difficulty": case.get("difficulty", "-"),
             "ok": ok, "asked": asked, "kind": reply.kind,
             "found": found, "expect": expect, "false_answer": false_answer,
+            "parse_ok": parse_ok, "transparent_not_found": transparent_not_found,
+            "confidence_ok": confidence_ok, "comparison_ok": comparison_ok,
             "text": reply.text}
 
 
@@ -131,6 +140,16 @@ def main():
               f"triggered a question")
     print(f"False answers         {sum(r['false_answer'] for r in results)} "
           f"(lower is better; a top-1 retrieval baseline scores {len(ambiguous)})")
+    print(f"Query parse accuracy  {sum(r['parse_ok'] for r in results)}/{total}")
+    print(f"Confidence handling   {sum(r['confidence_ok'] for r in results)}/{total}")
+    print(f"Transparent not-found {sum(r['transparent_not_found'] for r in results)}/{total}")
+    print(f"Candidate comparison  {sum(r['comparison_ok'] for r in results)}/{total}")
+    spatial = [r for r in results if r["difficulty"] == "spatial"]
+    if spatial:
+        print(f"Spatial retrieval     {sum(r['ok'] for r in spatial)}/{len(spatial)}")
+    small = [r for r in results if r["difficulty"] == "small-object"]
+    if small:
+        print(f"Small-object verify   {sum(r['ok'] for r in small)}/{len(small)}")
     print(f"Avg questions asked   {sum(turns) / len(turns):.1f}" if turns else
           "Avg questions asked   0")
 

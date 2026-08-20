@@ -31,6 +31,8 @@ CROP_MARGIN = 0.35
 
 # Below this, we do not trust the model's own "no" enough to act on it.
 REJECT_BELOW_CONFIDENCE = 0.6
+SMALL_OBJECT_AREA_FRACTION = 0.018
+LOW_CANDIDATE_CONFIDENCE = 0.70
 
 
 def _crop(cand, project_root, work_dir):
@@ -60,6 +62,25 @@ def _crop(cand, project_root, work_dir):
     return out
 
 
+def needs_verification(cand):
+    """Only spend VLM calls on candidates where a second look is worth it."""
+    obj = cand.get("object", {})
+    scene = cand.get("scene", {})
+    score = float(cand.get("score", obj.get("confidence", 0.5)) or 0.5)
+    if score < LOW_CANDIDATE_CONFIDENCE:
+        return True
+
+    bbox = obj.get("bbox") or []
+    if len(bbox) != 4:
+        return False
+    width = float(scene.get("width") or 0)
+    height = float(scene.get("height") or 0)
+    if width <= 0 or height <= 0:
+        return False
+    area = max(0.0, bbox[2] - bbox[0]) * max(0.0, bbox[3] - bbox[1])
+    return area / (width * height) < SMALL_OBJECT_AREA_FRACTION
+
+
 def verify_candidates(candidates, description, backend, cfg, on_progress=None):
     """Drop candidates the VLM says are not what the user described.
 
@@ -68,14 +89,17 @@ def verify_candidates(candidates, description, backend, cfg, on_progress=None):
     their object simply never turns up - while a false acceptance merely costs
     one clarification question.
     """
-    if not candidates or backend is None or len(candidates) < 2:
+    if not candidates or backend is None:
+        return candidates
+    selected = [c for c in candidates if needs_verification(c)]
+    if not selected:
         return candidates
 
     project_root = Path(cfg["paths"]["index"]).parent.parent
     work_dir = Path(cfg["paths"]["debug"]) / "verify"
 
-    kept = []
-    for cand in candidates:
+    kept = [c for c in candidates if c not in selected]
+    for cand in selected:
         crop_path = _crop(cand, project_root, work_dir)
         if crop_path is None:
             kept.append(cand)          # cannot check it, so do not punish it

@@ -1,5 +1,6 @@
 from src.spatial import (Box, compute_relations, find_predicate, is_above,
-                        is_beside, is_left_of, is_near, is_on)
+                        is_beside, is_left_of, is_near, is_on, is_overlapping,
+                        is_same_surface)
 
 
 def test_beside_true_for_side_by_side_objects():
@@ -49,6 +50,16 @@ def test_near_scales_with_image_size():
     assert not is_near(a, far, (1200, 800))
 
 
+def test_overlapping_and_same_surface_are_geometry_only():
+    a = Box.of([100, 100, 260, 260])
+    b = Box.of([220, 140, 380, 300])
+    assert is_overlapping(a, b)
+
+    mug = Box.of([100, 300, 170, 520])
+    laptop = Box.of([240, 330, 600, 520])
+    assert is_same_surface(mug, laptop)
+
+
 def test_compute_relations_emits_symmetric_beside():
     objects = [
         {"id": "s_o0", "bbox": [400, 300, 700, 550]},
@@ -58,6 +69,16 @@ def test_compute_relations_emits_symmetric_beside():
     beside = {(t["subject"], t["object"]) for t in triples if t["predicate"] == "beside"}
     assert ("s_o0", "s_o1") in beside
     assert ("s_o1", "s_o0") in beside
+
+
+def test_compute_relations_emits_extended_geometry_predicates():
+    objects = [
+        {"id": "a", "bbox": [100, 100, 260, 260]},
+        {"id": "b", "bbox": [220, 140, 380, 300]},
+    ]
+    triples = compute_relations(objects, (1200, 800))
+    predicates = {t["predicate"] for t in triples}
+    assert "overlapping" in predicates
 
 
 def test_compute_relations_skips_objects_without_boxes():
@@ -90,7 +111,8 @@ def test_view_dependent_predicates_are_classified():
     # these flip when you photograph the same desk from the other side
     assert VIEW_DEPENDENT == {"left_of", "right_of", "above", "below"}
     # these do not
-    assert CAMERA_INVARIANT == {"near", "beside", "on", "inside"}
+    assert CAMERA_INVARIANT == {"near", "beside", "on", "inside",
+                                "overlapping", "same_surface"}
 
 
 def test_left_of_query_falls_back_to_proximity():

@@ -29,6 +29,8 @@ BESIDE_GAP_FACTOR = 0.80        # horizontal gap < 0.8x mean width = "beside"
 OVERLAP_MIN = 0.25              # min projection overlap to count as aligned
 ON_TOP_TOLERANCE = 0.15         # vertical gap tolerance as fraction of lower box height
 DUPLICATE_IOU = 0.70            # two boxes overlapping this much are the same object
+OVERLAPPING_IOU = 0.08          # boxes visibly intersect, but are not duplicates
+SAME_SURFACE_BOTTOM_TOLERANCE = 0.10
 
 
 @dataclass
@@ -141,6 +143,26 @@ def is_inside(a, b):
     return inter / a.area > 0.8 and b.area > a.area
 
 
+def is_overlapping(a, b):
+    """Visible 2D overlap without claiming containment or identity."""
+    return 0 < iou(a, b) < DUPLICATE_IOU and (
+        iou(a, b) >= OVERLAPPING_IOU or
+        _overlap_ratio_x(a, b) >= 0.35 and _overlap_ratio_y(a, b) >= 0.35
+    )
+
+
+def is_same_surface(a, b):
+    """Heuristic for objects resting on the same tabletop/shelf plane.
+
+    In a 2D image we can only use bottom-edge alignment plus proximity. This is
+    useful for desks and tables, but deliberately does not name the surface.
+    """
+    if a.area <= 0 or b.area <= 0:
+        return False
+    tolerance = SAME_SURFACE_BOTTOM_TOLERANCE * max(a.h, b.h, 1.0)
+    return abs(a.y2 - b.y2) <= tolerance and _overlap_ratio_y(a, b) >= 0.15
+
+
 # Predicates users actually say, mapped to the functions above.
 # `near` needs the image size, the rest do not.
 _BINARY = {
@@ -151,19 +173,30 @@ _BINARY = {
     "below": is_below,
     "on": is_on,
     "inside": is_inside,
+    "overlapping": is_overlapping,
+    "same_surface": is_same_surface,
 }
 
 # What a user might type -> canonical predicate
 PREDICATE_SYNONYMS = {
     "beside": "beside", "next to": "beside", "by": "beside",
-    "alongside": "beside", "adjacent to": "beside",
-    "near": "near", "close to": "near", "around": "near",
+    "alongside": "beside", "adjacent to": "beside", "besids": "beside",
+    "near": "near", "close to": "near", "around": "near", "nearest": "near",
+    "closest to": "near", "cerca de": "near", "cerca del": "near",
     "on": "on", "on top of": "on", "atop": "on",
     "under": "below", "underneath": "below", "below": "below", "beneath": "below",
     "above": "above", "over": "above",
     "left of": "left_of", "to the left of": "left_of",
     "right of": "right_of", "to the right of": "right_of",
     "in": "inside", "inside": "inside", "within": "inside",
+    "overlapping": "overlapping", "overlaps": "overlapping",
+    "touching": "overlapping",
+    "same surface as": "same_surface", "on the same surface as": "same_surface",
+    "same table as": "same_surface", "on the same table as": "same_surface",
+    "same desk as": "same_surface", "on the same desk as": "same_surface",
+    # 2D photos cannot prove depth. Treat "behind" as proximity rather than
+    # making an unsupported 3D claim.
+    "behind": "near", "in front of": "near",
 }
 
 
@@ -215,7 +248,7 @@ def compute_relations(objects, image_wh):
 # them: when someone says "left of the laptop" they mean left from a viewpoint
 # we do not know, so we honour the part we can trust - that the two things are
 # near each other.
-CAMERA_INVARIANT = {"near", "beside", "on", "inside"}
+CAMERA_INVARIANT = {"near", "beside", "on", "inside", "overlapping", "same_surface"}
 VIEW_DEPENDENT = {"left_of", "right_of", "above", "below"}
 
 PREDICATE_ALTERNATIVES = {
@@ -227,6 +260,8 @@ PREDICATE_ALTERNATIVES = {
     "below": ("below", "near"),
     "on": ("on", "above"),
     "inside": ("inside",),
+    "overlapping": ("overlapping", "inside"),
+    "same_surface": ("same_surface", "beside", "near"),
 }
 
 

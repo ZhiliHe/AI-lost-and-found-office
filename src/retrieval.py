@@ -13,6 +13,9 @@ later, add it as an EXTRA scene score here; do not replace this.
 from .spatial import alternatives_for
 from .vocab import FUZZY_TYPE_GROUPS, OBJECT_SYNONYMS, is_negated
 
+HIGH_CONFIDENCE = 0.82
+MEDIUM_CONFIDENCE = 0.55
+
 
 class SceneIndex:
     def __init__(self, payload):
@@ -44,6 +47,23 @@ class SceneIndex:
             if obj["id"] == object_id:
                 return obj
         return None
+
+    def coverage(self, considered_scenes=None):
+        """What the system actually searched, for honest not-found replies."""
+        scenes = considered_scenes if considered_scenes is not None else self.scenes
+        locations = []
+        for scene in scenes:
+            loc = scene.get("location")
+            if loc and loc not in locations:
+                locations.append(loc)
+        return {
+            "photos": len(scenes),
+            "locations": locations,
+            "candidates": sum(len(s.get("objects", [])) for s in scenes),
+            "unprocessed": self.payload.get("unprocessed", []),
+            "failures": self.payload.get("failures", []) or self.payload.get("index_failures", []),
+            "total_photos": len(self.scenes),
+        }
 
 
 def score_scene(scene, parsed):
@@ -122,6 +142,29 @@ def _view_quality(cand):
     return abs(x2 - x1) * abs(y2 - y1) * float(cand["object"].get("confidence", 0.5))
 
 
+def confidence_band(value):
+    if value >= HIGH_CONFIDENCE:
+        return "high"
+    if value >= MEDIUM_CONFIDENCE:
+        return "medium"
+    return "low"
+
+
+def _base_confidence(obj):
+    return max(0.0, min(1.0, float(obj.get("confidence", 0.5) or 0.5)))
+
+
+def _candidate_confidence(cand, parsed=None):
+    """Combine detection, merge and retrieval evidence into one cautious score."""
+    votes = cand.get("confidence_votes") or [cand["object"].get("confidence", 0.5)]
+    detection = sum(float(v or 0.5) for v in votes) / len(votes)
+    multiview_boost = min(0.08, 0.03 * max(0, len(set(cand.get("seen_in", []))) - 1))
+    relation_boost = 0.04 if parsed and parsed.predicate and parsed.anchor_type else 0.0
+    attribute_boost = 0.03 * len(parsed.attributes) if parsed else 0.0
+    score = min(1.0, detection + multiview_boost + relation_boost + attribute_boost)
+    return round(score, 3)
+
+
 def merge_views(candidates):
     """Collapse the same physical object seen from several camera angles.
 
@@ -190,6 +233,7 @@ def _merge_one_group(items):
     for cand in by_scene[reference_id]:
         entry = dict(cand)
         entry["seen_in"] = [reference_id]
+        entry["confidence_votes"] = [_base_confidence(cand["object"])]
         entry["observed"] = {k: [v] for k, v in
                              (cand["object"].get("attributes") or {}).items() if v}
         canonical.append(entry)
@@ -224,6 +268,7 @@ def _absorb(canonical, others, scene_id):
 
         canon, other = canonical[canon_index], others[other_index]
         canon["seen_in"].append(scene_id)
+        canon.setdefault("confidence_votes", []).append(_base_confidence(other["object"]))
         for key, value in (other["object"].get("attributes") or {}).items():
             if value:
                 canon["observed"].setdefault(key, []).append(value)
@@ -231,8 +276,10 @@ def _absorb(canonical, others, scene_id):
         # but keep the accumulated votes and history.
         if _view_quality(other) > _view_quality(canon):
             seen, observed = canon["seen_in"], canon["observed"]
+            confidence_votes = canon["confidence_votes"]
             canon.update(other)
             canon["seen_in"], canon["observed"] = seen, observed
+            canon["confidence_votes"] = confidence_votes
 
 
 def _similarity(a, b):
@@ -307,7 +354,8 @@ def find_candidates(index, parsed, constraints=None, top_k_scenes=5,
             candidates.append({
                 "scene": scene,
                 "object": obj,
-                "score": float(obj.get("confidence", 0.5)),
+                "score": _base_confidence(obj),
+                "confidence_votes": [_base_confidence(obj)],
             })
 
     if merge_across_views:
@@ -316,8 +364,15 @@ def find_candidates(index, parsed, constraints=None, top_k_scenes=5,
     # Pass 2: now apply what the user told us.
     wanted = dict(parsed.attributes)
     wanted.update(constraints)
+    wanted_location = wanted.pop("location", None)
+    if wanted_location:
+        candidates = [c for c in candidates if c["scene"].get("location") == wanted_location]
     if wanted:
         candidates = [c for c in candidates if _satisfies(c, wanted)]
+
+    for cand in candidates:
+        cand["score"] = _candidate_confidence(cand, parsed)
+        cand["confidence_band"] = confidence_band(cand["score"])
 
     candidates.sort(key=lambda c: c["score"], reverse=True)
     return candidates

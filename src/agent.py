@@ -26,7 +26,7 @@ with a hard cap on turns so we can never loop forever.
 from dataclasses import dataclass, field
 
 from .query_parser import parse
-from .retrieval import find_candidates
+from .retrieval import confidence_band, find_candidates
 from .spatial import VIEW_DEPENDENT
 from .vocab import find_colors, negate
 
@@ -38,20 +38,21 @@ from .vocab import find_colors, negate
 #                   "closed", and "was your backpack open?" is not a question
 #                   anyone can answer about something they lost.
 # An attribute we cannot trust is worse than no attribute: it costs a turn.
-# Location is deliberately answer-only: the agent should identify the room
-# from the matching scene rather than ask the user for the final answer.
-ASKABLE_KEYS = ["color", "size", "material"]
+# Location is askable, but lower-priority than colour: people often remember a
+# room, and sometimes two candidates share every visible attribute.
+ASKABLE_KEYS = ["color", "size", "material", "location"]
 
 # Tuning knob. Question choice = (how well the attribute splits the candidates)
 # x (how reliably a human can answer it). People remember colour far better than
 # they remember what something was made of, so material is discounted.
 # Raise a value here to make the agent ask about that attribute sooner.
-KEY_PRIOR = {"color": 1.3, "size": 0.9, "material": 0.7}
+KEY_PRIOR = {"color": 1.3, "size": 0.9, "location": 0.8, "material": 0.7}
 
 KEY_QUESTIONS = {
     "color": "What colour is it?",
     "size": "Roughly how big is it?",
     "material": "What is it made of?",
+    "location": "Which room or area was it in?",
 }
 
 QUESTION_VARIANTS = {
@@ -70,6 +71,11 @@ QUESTION_VARIANTS = {
         "Do you remember the material?",
         "Which material fits your item?",
     ),
+    "location": (
+        "Which location sounds right?",
+        "Do you remember the room or area?",
+        "Where do you think you left it?",
+    ),
 }
 
 
@@ -80,10 +86,13 @@ class Reply:
     candidates: list = field(default_factory=list)
     asked_key: str = None
     options: list = field(default_factory=list)
+    confidence: str = None
 
 
 def _value_of(cand, key):
     """Return the indexed object attribute used for clarification."""
+    if key == "location":
+        return cand["scene"].get("location")
     return cand["object"].get("attributes", {}).get(key)
 
 
@@ -146,6 +155,32 @@ def format_question(key, options, candidate_count, turn):
     return f"{prefix} {prompt[turn % len(prompt)]} ({choices})"
 
 
+def candidate_summary(cand, parsed=None):
+    """Compact distinguishing text for comparison lists."""
+    obj = cand["object"]
+    attrs = obj.get("attributes", {})
+    bits = [attrs.get("color"), attrs.get("material"), attrs.get("size"),
+            obj.get("type"), cand["scene"].get("location")]
+    place = describe_place(cand["scene"], obj, parsed.anchor_type if parsed else None)
+    relation = place.split(",", 1)[1].strip() if "," in place else None
+    if relation:
+        bits.append(relation)
+    unique = []
+    for bit in bits:
+        if bit and bit not in unique:
+            unique.append(str(bit))
+    return ", ".join(unique[:5])
+
+
+def comparison_text(candidates, parsed=None, limit=3):
+    """Short visual/text comparison for ambiguous candidate sets."""
+    lines = []
+    labels = "ABCDEFGHIJKLMNOPQRSTUVWXYZ"
+    for idx, cand in enumerate(candidates[:limit]):
+        lines.append(f"Candidate {labels[idx]}: {candidate_summary(cand, parsed)}")
+    return "\n".join(lines)
+
+
 def describe_place(scene, obj, prefer_anchor=None):
     """'in the office, beside the laptop' - built from indexed relations,
     never from the model's own words.
@@ -203,6 +238,24 @@ def describe_object(obj):
 def describe_not_found(parsed, scene_count):
     """Explain that absence from the indexed photos is not proof of loss."""
     request = parsed.describe()
+    if isinstance(scene_count, dict):
+        coverage = scene_count
+        photos = coverage.get("photos", 0)
+        scenes = "picture" if photos == 1 else "pictures"
+        locations = coverage.get("locations") or []
+        loc_text = f" across {len(locations)} location(s): {', '.join(locations)}" \
+            if locations else ""
+        text = (f"I couldn't find a {request} in the indexed data I searched: "
+                f"{photos} available {scenes}{loc_text}, covering "
+                f"{coverage.get('candidates', 0)} indexed object candidate(s). "
+                "That means not found in indexed data, not not found anywhere. "
+                "It may be outside the photographed area, hidden from view, or in "
+                "a scene that has not been indexed yet.")
+        missing = len(coverage.get("unprocessed") or []) + len(coverage.get("failures") or [])
+        if missing:
+            text += f" I also see {missing} unprocessed or failed item(s) in the index metadata."
+        return text
+
     scenes = "picture" if scene_count == 1 else "pictures"
     return (f"I couldn't find a {request} in the {scene_count} available {scenes}. "
             "It may be outside the photographed area, hidden from view, or in "
@@ -233,6 +286,8 @@ class Session:
         self.turns = 0
         self.candidates = []
         self.verified_ids = set()      # only pay for each VLM check once
+        self.rejected_ids = set()
+        self.confirmed_low = False
 
     # ------------------------------------------------------------------ #
     def start(self, query):
@@ -259,21 +314,28 @@ class Session:
         indexer got wrong never becomes a clarification question. Each object is
         checked at most once per conversation.
         """
-        if not self.verifier or len(self.candidates) < 2:
+        if not self.verifier:
             return
+        from .verify import needs_verification
+
         fresh = [c for c in self.candidates
-                 if c["object"]["id"] not in self.verified_ids]
+                 if c["object"]["id"] not in self.verified_ids and needs_verification(c)]
         if not fresh:
             return
 
         description = " ".join(filter(None, [
             self.parsed.attributes.get("color"), self.parsed.target_type]))
-        survivors = self.verifier(self.candidates, description)
-        for cand in self.candidates:
+        survivors = self.verifier(fresh, description)
+        for cand in fresh:
             self.verified_ids.add(cand["object"]["id"])
 
         kept = {c["object"]["id"] for c in survivors}
-        self.candidates = [c for c in self.candidates if c["object"]["id"] in kept]
+        # Verification is advisory. Non-selected candidates remain, and selected
+        # candidates survive unless the verifier confidently rejected them.
+        self.candidates = [
+            c for c in self.candidates
+            if c not in fresh or c["object"]["id"] in kept
+        ] or self.candidates
 
     def _apply_answer(self, user_text):
         key, options = self.pending_key, self.pending_options
@@ -281,6 +343,14 @@ class Session:
         self.asked.append(key)
 
         text = user_text.strip().lower()
+        if key == "confirm_candidate":
+            if text.startswith(("y", "yeah", "yep", "yes", "correct", "that's it",
+                                "그", "네", "응", "맞")):
+                self.confirmed_low = True
+            elif self.candidates:
+                self.rejected_ids.add(self.candidates[0]["object"]["id"])
+            return
+
         if text in ("i don't know", "dont know", "no idea", "not sure", "idk",
                     "몰라", "모르겠어", ""):
             return  # attribute burned, no constraint added
@@ -310,6 +380,13 @@ class Session:
                 self.constraints["color"] = colors[0]
             return
 
+        if key == "location":
+            for option in options:
+                if str(option).lower() in text or text in str(option).lower():
+                    self.constraints["location"] = option
+                    return
+            return
+
         # Only one value to offer, so it became a yes/no question.
         # "No" is just as informative as "yes" - it rules that value out.
         if len(options) == 1:
@@ -329,6 +406,9 @@ class Session:
         self.candidates = find_candidates(
             self.index, self.parsed, self.constraints, top_k_scenes=self.top_k_scenes,
             merge_across_views=self.merge_across_views)
+        if self.rejected_ids:
+            self.candidates = [c for c in self.candidates
+                               if c["object"]["id"] not in self.rejected_ids]
         self._verify()
 
         if not self.candidates:
@@ -347,35 +427,56 @@ class Session:
                         f"Here is the closest I have for \"{self.parsed.describe()}\":",
                         candidates=self.candidates[:3])
             return Reply("none_found",
-                         describe_not_found(self.parsed, len(self.index.scenes)))
+                         describe_not_found(self.parsed, self.index.coverage()))
 
         if len(self.candidates) == 1:
             cand = self.candidates[0]
+            band = confidence_band(cand.get("score", 0.5))
+            if band == "low" and not self.confirmed_low:
+                self.pending_key, self.pending_options = "confirm_candidate", ["yes", "no"]
+                return Reply(
+                    "question",
+                    "I found one low-confidence possible match, so I don't want to "
+                    f"guess. Is this your {self.parsed.describe()}?\n"
+                    f"{comparison_text([cand], self.parsed)}",
+                    candidates=self.candidates,
+                    asked_key="confirm_candidate",
+                    options=["yes", "no"],
+                    confidence=band)
+            prefix = "Found it" if band == "high" else "I think I found it"
+            uncertainty = "" if band == "high" else " The match is medium-confidence, so please check the image."
             return Reply(
                 "answer",
-                f"Found it - the {describe_object(cand['object'])} is "
-                f"{describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}.",
-                candidates=self.candidates)
+                f"{prefix} - the {describe_object(cand['object'])} is "
+                f"{describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}."
+                f"{uncertainty}",
+                candidates=self.candidates,
+                confidence=band)
 
         if self.turns >= self.max_turns:
             return Reply(
                 "giveup",
                 f"I still see {len(self.candidates)} possible matches"
-                f" Here are the most likely ones:",
-                candidates=self.candidates[:3])
+                f" Here are the most likely ones:\n"
+                f"{comparison_text(self.candidates, self.parsed)}",
+                candidates=self.candidates[:3],
+                confidence="medium")
 
         key, options = choose_question(self.candidates, self.asked)
         if key is None:
             return Reply(
                 "giveup",
                 f"I found {len(self.candidates)} of them and they look the same to me. "
-                f"Here they are:",
-                candidates=self.candidates[:3])
+                f"Here they are:\n{comparison_text(self.candidates, self.parsed)}",
+                candidates=self.candidates[:3],
+                confidence="medium")
 
         self.turns += 1
         self.pending_key, self.pending_options = key, options
 
         question = format_question(key, options, len(self.candidates), self.turns - 1)
+        question = f"{question}\n{comparison_text(self.candidates, self.parsed)}"
 
         return Reply("question", question, candidates=self.candidates,
-                     asked_key=key, options=options)
+                     asked_key=key, options=options,
+                     confidence="medium")

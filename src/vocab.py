@@ -15,7 +15,8 @@ COLORS = [
     "transparent", "multicolor",
 ]
 
-# map sloppy model output -> canonical colour
+# map sloppy model output -> canonical colour. This is also used for queries,
+# so it includes common non-English words where the mapping is unambiguous.
 COLOR_ALIASES = {
     "dark": "black", "dark gray": "black", "dark grey": "black",
     "charcoal": "black", "grey": "gray", "light gray": "gray",
@@ -55,6 +56,13 @@ OBJECT_SYNONYMS = {
     "skateboard": ["skateboard", "board"],
 }
 
+QUERY_OBJECT_ALIASES = {
+    "botle": "bottle", "bottel": "bottle", "bttle": "bottle",
+    "labtop": "laptop", "lap top": "laptop", "mac book": "laptop",
+    "chargre": "charger", "chager": "charger", "adaptor": "charger",
+    "usb": "cable", "cabel": "cable", "kyes": "keys", "key chain": "keys",
+}
+
 # Categories a small VLM genuinely mixes up. A query for one member matches any
 # member of the group, and the agent then asks which one the user meant.
 # Discovered from real output: Qwen3-VL-2B labelled a tall water bottle a "mug".
@@ -74,6 +82,7 @@ _SYNONYM_LOOKUP = {
     for canonical, syns in OBJECT_SYNONYMS.items()
     for syn in syns
 }
+_SYNONYM_LOOKUP.update({k.lower(): v for k, v in QUERY_OBJECT_ALIASES.items()})
 
 # --- attribute keys the VLM should try to fill ------------------------------
 ATTRIBUTE_KEYS = ["color", "material", "size"]
@@ -135,6 +144,25 @@ def _padded(text):
     return " " + " ".join(cleaned.split()) + " "
 
 
+def _close_token_match(token, choices, max_distance=1):
+    """Return a vocabulary word close to a user's typo, or None.
+
+    Kept deliberately conservative: only single-token words of length >= 5 are
+    eligible, so "pen" does not start matching arbitrary short words.
+    """
+    import difflib
+
+    if len(token) < 5:
+        return None
+    matches = difflib.get_close_matches(token, choices, n=1, cutoff=0.84)
+    if not matches:
+        return None
+    candidate = matches[0]
+    if abs(len(candidate) - len(token)) > max_distance:
+        return None
+    return candidate
+
+
 def find_object_types(text):
     """Return every canonical object type mentioned in a free-text string,
     longest match first so 'notebook computer' beats 'notebook'.
@@ -165,6 +193,13 @@ def find_object_types(text):
         for syn in sorted(_SYNONYM_LOOKUP, key=len, reverse=True):
             if len(syn) >= 5 and syn in single_token:
                 return [_SYNONYM_LOOKUP[syn]]
+
+    for token in t.strip().split():
+        match = _close_token_match(token, [s for s in _SYNONYM_LOOKUP if " " not in s])
+        if match:
+            canonical = _SYNONYM_LOOKUP[match]
+            if canonical not in hits:
+                hits.append(canonical)
     return hits
 
 
@@ -178,4 +213,8 @@ def find_colors(text):
             if c not in hits:
                 hits.append(c)
             t = t.replace(f" {name} ", " ")
+    for token in t.strip().split():
+        match = _close_token_match(token, COLORS)
+        if match and match not in hits:
+            hits.append(match)
     return hits

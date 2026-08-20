@@ -4,7 +4,8 @@ knowing when NOT to answer.
 
 import pytest
 
-from src.agent import Session, choose_question, format_question, _split_quality
+from src.agent import (Session, choose_question, comparison_text, format_question,
+                       _split_quality)
 from src.query_parser import parse
 from src.retrieval import find_candidates, rank_scenes
 
@@ -66,6 +67,7 @@ def test_ambiguous_query_asks_instead_of_guessing(index, config):
     assert reply.kind == "question"
     assert reply.asked_key == "color"
     assert set(reply.options) == {"black", "blue"}
+    assert "Candidate A:" in reply.text
 
 
 def test_full_clarification_converges(index, config):
@@ -75,9 +77,8 @@ def test_full_clarification_converges(index, config):
     assert first.kind == "question"
 
     second = session.reply("black")
-    # Location is the answer, not a clarification question.
-    assert second.kind == "giveup"
-    assert second.asked_key != "location"
+    assert second.kind == "question"
+    assert second.asked_key == "location"
     assert len(second.candidates) == 2
 
 
@@ -102,6 +103,7 @@ def test_unknown_object_is_reported_not_guessed(index, config):
     assert reply.kind == "none_found"
     assert "available pictures" in reply.text
     assert "outside the photographed area" in reply.text
+    assert "not found in indexed data" in reply.text
 
 
 def test_unseen_attribute_is_reported_as_absent_from_pictures(index, config):
@@ -145,12 +147,12 @@ def test_choose_question_skips_already_asked(index):
     assert key != "color"
 
 
-def test_choose_question_does_not_ask_for_location(index):
+def test_choose_question_can_ask_location_when_visual_attributes_are_exhausted(index):
     candidates = find_candidates(index, parse("where is my bottle"))
     key, options = choose_question(
         candidates, already_asked=["color", "size", "material"])
-    assert key is None
-    assert options == []
+    assert key == "location"
+    assert set(options) == {"office", "classroom"}
 
 
 def test_question_wording_changes_by_turn():
@@ -159,6 +161,46 @@ def test_question_wording_changes_by_turn():
     assert first != second
     assert "black" in first and "blue" in first
     assert "black" in second and "blue" in second
+
+
+def test_candidate_comparison_is_concise(index):
+    candidates = find_candidates(index, parse("where is my bottle"))
+    text = comparison_text(candidates, parse("where is my bottle"))
+    assert "Candidate A:" in text
+    assert "office" in text
+    assert len(text.splitlines()) <= 3
+
+
+def test_medium_confidence_answer_states_uncertainty(config):
+    from src.retrieval import SceneIndex
+    lowish = {"scene_id": "office_01", "location": "office",
+              "image_path": "data/images/office/office_01.jpg",
+              "width": 1200, "height": 800, "caption": "desk", "relations": [],
+              "objects": [{"id": "office_01_o0", "type": "phone",
+                           "attributes": {"color": "black", "material": "metal",
+                                          "size": "small"},
+                           "bbox": [100, 100, 300, 300], "confidence": 0.62}]}
+    reply = Session(SceneIndex({"version": 1, "scenes": [lowish]}), config).start(
+        "find my phone")
+    assert reply.kind == "answer"
+    assert reply.confidence == "medium"
+    assert "medium-confidence" in reply.text
+
+
+def test_low_confidence_single_candidate_asks_for_confirmation(config):
+    from src.retrieval import SceneIndex
+    low = {"scene_id": "office_01", "location": "office",
+           "image_path": "data/images/office/office_01.jpg",
+           "width": 1200, "height": 800, "caption": "desk", "relations": [],
+           "objects": [{"id": "office_01_o0", "type": "keys",
+                        "attributes": {"color": "silver", "material": "metal",
+                                       "size": "small"},
+                        "bbox": [100, 100, 140, 130], "confidence": 0.42}]}
+    reply = Session(SceneIndex({"version": 1, "scenes": [low]}), config).start(
+        "find my keys")
+    assert reply.kind == "question"
+    assert reply.confidence == "low"
+    assert reply.asked_key == "confirm_candidate"
 
 
 # --- multiple camera angles of the same place ------------------------------ #
@@ -356,6 +398,11 @@ def test_verifier_drops_candidates_the_model_rejects(index, config):
         # pretend the model rejected everything in the classroom
         return [c for c in candidates if c["scene"]["location"] != "classroom"]
 
+    for scene in index.scenes:
+        for obj in scene.get("objects", []):
+            if obj.get("type") == "bottle":
+                obj["confidence"] = 0.5
+
     session = Session(index, config, verifier=fake_verifier)
     reply = session.start("where is my black bottle")
 
@@ -390,6 +437,17 @@ def test_verification_never_empties_the_result(index, config):
     cfg = {"paths": {"index": "data/scene_index.json", "debug": "data/debug"}}
     survivors = verify_candidates(candidates, "bottle", RejectEverything(), cfg)
     assert survivors            # never empty
+
+
+def test_verifier_is_selective_for_small_or_low_confidence(index):
+    from src.verify import needs_verification
+    cand = find_candidates(index, parse("where is my bottle"))[0]
+    cand["object"]["bbox"] = [100, 100, 800, 700]
+    cand["object"]["confidence"] = 0.95
+    cand["score"] = 0.95
+    assert not needs_verification(cand)
+    cand["score"] = 0.4
+    assert needs_verification(cand)
 
 
 def test_index_paths_are_posix_style():

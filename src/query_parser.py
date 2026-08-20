@@ -1,13 +1,9 @@
-"""Turn "Find the black bottle beside my laptop" into a structured query.
+"""Turn natural language into the stable ParsedQuery schema.
 
-Deliberately rule-based, not an LLM call. Three reasons:
-  1. it is instant, so the demo never stalls on a second model
-  2. it is deterministic, so tests are meaningful
-  3. it fails visibly instead of hallucinating a target object
-
-If it turns out to be too brittle on real user phrasing, the clean upgrade is to
-swap ONLY this module for an LLM that emits the same dataclass. Nothing
-downstream changes.
+This is a structured parser, not a retrieval model. It normalises user language
+into deterministic constraints, then the rest of the pipeline still decides
+matches from the offline index. An LLM can replace only this module later, but
+it must emit the same ParsedQuery fields and must not choose results directly.
 """
 
 from dataclasses import dataclass, field
@@ -37,35 +33,80 @@ class ParsedQuery:
         return text
 
 
+FILLER_PREFIXES = (
+    "where is", "where's", "where did i put", "find", "find me", "look for",
+    "locate", "is there", "do you see", "i lost", "i left", "i misplaced",
+    "can you find", "please find", "show me", "help me find",
+    "busca", "encuentra", "cherche", "trouve", "찾아", "어디",
+)
+
+
+def _normalise_text(text):
+    text = str(text or "").strip()
+    replacements = {
+        "w/": " with ",
+        "w/o": " without ",
+        "next 2": " next to ",
+        "nxt to": " next to ",
+        "besids": " beside ",
+        "besid": " beside ",
+        "nearby": " near ",
+    }
+    lowered = text.lower()
+    for old, new in replacements.items():
+        lowered = lowered.replace(old, new)
+    return lowered
+
+
+def _remove_filler(text):
+    cleaned = text
+    for phrase in sorted(FILLER_PREFIXES, key=len, reverse=True):
+        if cleaned.startswith(phrase):
+            cleaned = cleaned[len(phrase):].strip(" ?!.,")
+            break
+    for word in (" my ", " the ", " a ", " an ", " that ", " this "):
+        cleaned = cleaned.replace(word, " ")
+    return " ".join(cleaned.split())
+
+
+def _first_distinct(types):
+    return types[0] if types else None
+
+
 # locations are just the folder names under data/images
 def parse(text, known_locations=()):
-    predicate, phrase = find_predicate(text)
+    normalised = _normalise_text(text)
+    predicate, phrase = find_predicate(normalised)
 
     if phrase:
-        cut = text.lower().find(phrase)
-        left, right = text[:cut], text[cut + len(phrase):]
+        cut = normalised.find(phrase)
+        left, right = normalised[:cut], normalised[cut + len(phrase):]
     else:
-        left, right = text, ""
+        left, right = normalised, ""
 
-    left_types = find_object_types(left)
-    right_types = find_object_types(right)
+    left_clean = _remove_filler(left)
+    right_clean = _remove_filler(right)
+    left_types = find_object_types(left_clean)
+    right_types = find_object_types(right_clean)
 
     # Nothing on the left of the relation word ("beside the laptop, a bottle")
     # - fall back to scanning the whole string.
     if not left_types and right_types:
-        all_types = find_object_types(text)
-        target = all_types[0] if all_types else None
+        all_types = find_object_types(normalised)
+        target = _first_distinct(all_types)
         anchor = right_types[0] if right_types[0] != target else (
             right_types[1] if len(right_types) > 1 else None)
     else:
-        target = left_types[0] if left_types else None
+        target = _first_distinct(left_types) or _first_distinct(find_object_types(normalised))
         anchor = right_types[0] if right_types else None
+        if anchor == target and len(right_types) > 1:
+            anchor = right_types[1]
 
     # colours mentioned before the relation word describe the target
-    colors = find_colors(left if phrase else text)
+    colors = find_colors(left_clean if phrase else normalised)
 
     location = None
-    lowered = text.lower()
+    lowered = normalised
     for name in known_locations:
         if name.lower() in lowered:
             location = name
