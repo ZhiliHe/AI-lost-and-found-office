@@ -75,13 +75,14 @@ def test_full_clarification_converges(index, config):
     assert first.kind == "question"
 
     second = session.reply("black")
-    # two black metal bottles remain, in different rooms - so it asks WHERE
-    assert second.kind == "question"
-    assert second.asked_key == "location"
+    # Two black metal bottles remain, in different rooms. We do NOT ask which
+    # room - the user asked us where it is. Words are out, so we show photos.
+    assert second.kind == "choose"
+    assert len(second.candidates) >= 2
 
-    final = session.reply("office")
+    final = session.reply("1")
     assert final.kind == "answer"
-    assert final.candidates[0]["object"]["id"] == "office_01_o1"
+    assert final.candidates[0]["object"]["id"] == second.candidates[0]["object"]["id"]
 
 
 def test_agent_gives_up_rather_than_looping_forever(index, config):
@@ -133,12 +134,19 @@ def test_choose_question_skips_already_asked(index):
     assert key != "color"
 
 
-def test_choose_question_falls_back_to_location(index):
+def test_location_is_never_asked_about(index):
+    """The user asked "where is it?" - answering "which room was it in?" hands
+    the question back to them. The room is what we are supposed to work out, so
+    it is answer-only: taken if volunteered, never asked for.
+
+    When the attributes run out we show photos instead (see the pick tests)."""
     candidates = find_candidates(index, parse("where is my bottle"))
-    key, options = choose_question(
-        candidates, already_asked=["color", "size", "material"])
-    assert key == "location"
-    assert len(options) > 1
+    key, _ = choose_question(candidates, already_asked=["color", "size", "material"])
+    assert key is None
+
+    for asked in ([], ["color"], ["color", "size"]):
+        key, _ = choose_question(candidates, already_asked=asked)
+        assert key != "location", asked
 
 
 # --- multiple camera angles of the same place ------------------------------ #

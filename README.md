@@ -139,6 +139,17 @@ weighted by how reliably a human can answer it (people remember colour and which
 room far better than they remember material). That makes the clarification
 behaviour deterministic, explainable and unit-testable.
 
+The agent can ask about colour, room, size, material **and object type**. A
+"notebook" query legitimately spans laptops and paper notebooks, and a "bottle"
+query can surface mugs (see `vocab.py`), so when the candidate set mixes types
+the agent asks *which one* — nothing else can separate a black laptop from a
+black notebook. Answers are not restricted to the offered options either: say
+"meeting" when asked "office or classroom?", or volunteer extra details while
+answering ("it's in the office, and it's black") — every usable word is taken,
+so a good answer never costs a second turn. If the user's constraints rule
+everything out, the agent drops the impossible one (not blindly the newest) and
+honestly shows the closest matches instead of dead-ending.
+
 ---
 
 ## Attributes: what survived, and why
@@ -186,7 +197,7 @@ verification can never empty the result set — turning a findable object into
 ```
 config.yaml                model, paths, thresholds — the only place to edit
 src/
-  vlm.py                   backend adapter: mlx | transformers | dummy
+  vlm.py                   backend adapter: mlx | transformers | cuda | dummy
   prompts.py               scene-extraction prompt + its tuning log
   indexer.py               photos  -> data/scene_index.json     (offline, slow)
   spatial.py               boxes   -> relations                 (pure geometry)
@@ -286,6 +297,61 @@ attributes and retrieval silently degrades.
 
 ---
 
+## CUDA acceleration (NVIDIA)
+
+The `cuda` backend runs the same transformers models on an NVIDIA GPU, but
+with the knobs that actually matter:
+
+- **Forced GPU** — it never silently falls back to CPU; it fails loudly and
+  tells you how to fix it instead of grinding through 40 images at CPU speed.
+- **Half precision** (`float16`, ~2× faster than fp32) with `bfloat16` for
+  Ampere+ cards and larger models.
+- **Flash Attention** when available, with an automatic `sdpa` fallback — you
+  never have to know which one your machine supports.
+- **Batched indexing** — `vlm.batch_size: 2` sends 2 images through one
+  `generate()` call. Generation is GPU-bound, so a batch of 2–4 images costs
+  barely more than one; this is the single biggest CUDA speedup for indexing.
+- **Optional `torch.compile`** (`vlm.compile: true`) — slow first call, faster
+  everything after.
+
+Setup (one time):
+
+```bash
+pip install torch --index-url https://download.pytorch.org/whl/cu128   # CUDA torch
+pip install -U "transformers>=4.57" accelerate qwen-vl-utils jinja2
+pip install flash-attn --no-build-isolation      # optional; sdpa is the fallback
+python -c "import torch; print(torch.cuda.is_available())"   # must print True
+```
+
+Then edit `config.yaml`:
+
+```yaml
+vlm:
+  backend: cuda
+  model: Qwen/Qwen2-VL-2B-Instruct
+  dtype: float16          # auto also means float16 on the cuda backend
+  batch_size: 2           # images per generation call; 4 on a 16 GB+ card
+```
+
+You know it is actually on the GPU because the indexer prints a banner:
+
+```
+CUDA backend ready: NVIDIA GeForce RTX 4070 (compute 8.9, 12.0 GB VRAM, 10.2 GB free)
+  device=cuda:0 dtype=torch.float16 attention=sdpa compile=off
+CUDA batching: 2 images per generation call (vlm.batch_size)
+```
+
+(If `attention=sdpa`, flash-attn is not installed — that is fine, SDPA is
+already a large speedup over eager.) While indexing runs, `nvidia-smi` shows
+the model using VRAM.
+
+`backend: transformers` remains the "just make it work" option: on a CUDA
+machine it also lands on the GPU (via `device_map="auto"`) but without half
+precision, Flash Attention or batching. Nothing else in the repo changes —
+`cuda` and `transformers` produce identical index JSON.
+
+---
+
 ## Platform notes
 
 Everything except the VLM backend is pure Python and runs on macOS, Linux and
@@ -293,8 +359,10 @@ Windows. Two things to know:
 
 - **Windows and Linux cannot use the `mlx` backend** — it is Apple Silicon only.
   Use `backend: transformers` (`pip install -U "transformers>=4.57" torch
-  accelerate qwen-vl-utils jinja2`), or skip indexing entirely: `scene_index.json`
-  is committed, so the agent, retrieval, UI and tests all run with no model.
+  accelerate qwen-vl-utils jinja2`) for CPU or auto-detected CUDA, or the
+  `cuda` backend below for explicit NVIDIA acceleration. Or skip indexing
+  entirely: `scene_index.json` is committed, so the agent, retrieval, UI and
+  tests all run with no model.
 - **Paths in the index are always POSIX-style** (`data/images/office/x.jpg`),
   written with `as_posix()` on every platform. A Windows machine writing
   `data\images\office\x.jpg` into the shared index would break every Mac and

@@ -2,12 +2,34 @@
 # Change `vlm.model` to swap models. Nothing else in the code hardcodes a model.
 
 vlm:
-  # backend: mlx | transformers | dummy
+  # backend: mlx | transformers | cuda | dummy
   #   mlx          -> Apple Silicon, via mlx-vlm  (recommended on Mac)
-  #   transformers -> CUDA / CPU, via HuggingFace transformers
+  #   transformers -> CPU or auto-detected CUDA, via HuggingFace transformers
+  #   cuda         -> NVIDIA GPU, explicitly accelerated: forced CUDA device,
+  #                   half precision, Flash Attention (sdpa fallback), optional
+  #                   torch.compile, batched indexing (fastest on an NVIDIA box)
   #   dummy        -> no model needed, returns canned output (for development)
+  #
+  # THESE TWO LINES ARE PER-MACHINE. They are the one part of this file that
+  # legitimately differs between us, so they conflict on every merge. Change
+  # them locally to whatever your machine has; do not "fix" someone else's.
+  # Only the person who INDEXES needs them right - everyone else works from the
+  # committed data/scene_index.json and needs no model at all.
+  #
+  # On Apple Silicon:
+  #   pip install -U mlx-vlm
   backend: mlx
   model: models/Qwen3-VL-2B-Instruct-4bit
+  #
+  # On an NVIDIA machine:
+  #   pip install torch --index-url https://download.pytorch.org/whl/cu128
+  # backend: cuda
+  # model: Qwen/Qwen2-VL-2B-Instruct   # 3B fp16 does NOT fit in 8GB VRAM
+
+  # Set true on networks that cannot reach huggingface.co: loads ONLY from the
+  # local cache and never does the online HEAD check (which hangs forever on a
+  # blocked network). Requires the model to already be cached.
+  hf_offline: true
   # Each object costs ~120 tokens, so 15 objects needs ~1800. 3072 is ample for
   # any real desk.
   #
@@ -47,6 +69,39 @@ vlm:
   # If your boxes land in the wrong place, this is the first thing to change.
   # Verify with:  python -m src.visualize --scene office_01
   coord_mode: norm1000
+
+  # --- CUDA acceleration (used by backend: cuda; ignored elsewhere) ---------
+  #
+  # Which device to run on.
+  #   auto -> the CUDA backend forces the first GPU (cuda:0); the transformers
+  #           backend lets torch/accelerate decide (device_map="auto")
+  #   cuda | cuda:0 | cuda:1 -> force a specific GPU
+  #   cpu  -> force the CPU
+  device: auto
+
+  # Inference precision. The cuda backend treats "auto" as float16, which is
+  # ~2x faster than fp32 and the safe default. bfloat16 is gentler on Ampere+
+  # (RTX 30xx/40xx/50xx) for larger models.
+  #   auto | float16 | bfloat16 | float32
+  dtype: auto
+
+  # Attention implementation. flash_attention_2 needs the flash-attn package;
+  # if it is missing or unsupported the cuda backend falls back to sdpa
+  # automatically, so leaving this on the default is always safe.
+  #   auto | flash_attention_2 | sdpa | eager
+  attn_implementation: auto
+
+  # torch.compile the model. The FIRST generation pays a one-off compile cost
+  # (minutes) and later ones run faster. Off by default because it is flaky on
+  # some Windows + CUDA setups.
+  compile: false
+
+  # Images per GPU generation call in src/indexer.py. Generation is GPU-bound,
+  # so 2-4 images in one call are barely slower than 1 image - this is the
+  # biggest CUDA speedup for indexing. 4 fits on 8 GB VRAM with a 2B model;
+  # if the indexer prints "(batch of N failed ... retrying one by one)" or an
+  # OOM, drop back to 2. Only used when backend is cuda.
+  batch_size: 2
 
 paths:
   images: data/images

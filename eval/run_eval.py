@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.agent import Session          # noqa: E402
+from src.agent import PICK_KEY, Session          # noqa: E402
 from src.config import load_config     # noqa: E402
 from src.retrieval import SceneIndex   # noqa: E402
 
@@ -39,6 +39,16 @@ def answer_as_the_user(reply, scene, obj):
     know, we say so honestly rather than feeding it a lucky guess.
     """
     key = reply.asked_key
+
+    # The agent gave up on words and showed photos. A real owner recognises
+    # their own belonging instantly, so the simulated user does too - anything
+    # else would measure our patience, not the agent.
+    if key == PICK_KEY:
+        for position, object_id in enumerate(reply.options, 1):
+            if object_id == obj["id"]:
+                return str(position)
+        return "none"
+
     if key == "location":
         return scene.get("location", "i don't know")
 
@@ -64,7 +74,8 @@ def run_case(index, cfg, case):
     if expect and expect != "any":
         scene, obj = find_target(index, expect)
 
-    while reply.kind == "question" and asked < 10:
+    # "choose" is a question too - the agent is asking which photo is yours.
+    while reply.kind in ("question", "choose") and asked < 10:
         if asked < len(scripted):
             answer = scripted[asked]
         elif obj is not None:

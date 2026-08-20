@@ -24,11 +24,12 @@ with a hard cap on turns so we can never loop forever.
 """
 
 from dataclasses import dataclass, field
+import re
 
 from .query_parser import parse
 from .retrieval import find_candidates
 from .spatial import VIEW_DEPENDENT
-from .vocab import find_colors, negate
+from .vocab import MATERIALS, SIZES, find_colors, is_negated, negate
 
 # Order matters: we prefer to ask about attributes a human can answer instantly.
 # Removed over two rounds of looking at real output:
@@ -38,17 +39,15 @@ from .vocab import find_colors, negate
 #                   "closed", and "was your backpack open?" is not a question
 #                   anyone can answer about something they lost.
 # An attribute we cannot trust is worse than no attribute: it costs a turn.
-# "location" is a first-class question, not a last resort. Which room someone
-# left something in is one of the things people remember BEST, and when the
-# same kind of object sits in three different rooms it is the single most
-# discriminating thing we can ask.
-ASKABLE_KEYS = ["color", "location", "size", "material"]
+# Location is deliberately answer-only: the agent should identify the room
+# from the matching scene rather than ask the user for the final answer.
+ASKABLE_KEYS = ["color", "size", "material"]
 
 # Tuning knob. Question choice = (how well the attribute splits the candidates)
 # x (how reliably a human can answer it). People remember colour far better than
 # they remember what something was made of, so material is discounted.
 # Raise a value here to make the agent ask about that attribute sooner.
-KEY_PRIOR = {"color": 1.3, "location": 1.2, "size": 0.9, "material": 0.7}
+KEY_PRIOR = {"color": 1.3, "size": 0.9, "material": 0.7}
 
 # Sentinel for "the pending question is a pick-from-photos", not an attribute.
 PICK_KEY = "__pick__"
@@ -64,9 +63,26 @@ QUESTION_OPENERS = ("where", "find", "is there", "show", "which", "what about",
 
 KEY_QUESTIONS = {
     "color": "What colour is it?",
-    "location": "Which room was it in?",
     "size": "Roughly how big is it?",
     "material": "What is it made of?",
+}
+
+QUESTION_VARIANTS = {
+    "color": (
+        "What colour is yours?",
+        "Do you remember its colour?",
+        "Which colour matches your item?",
+    ),
+    "size": (
+        "Roughly how big was it?",
+        "Would you call it small, medium, or large?",
+        "Which size sounds right for it?",
+    ),
+    "material": (
+        "What was it made of?",
+        "Do you remember the material?",
+        "Which material fits your item?",
+    ),
 }
 
 
@@ -80,10 +96,7 @@ class Reply:
 
 
 def _value_of(cand, key):
-    """Attributes live on the object; location lives on the scene. Treating
-    them uniformly lets location compete as just another question."""
-    if key == "location":
-        return cand["scene"].get("location")
+    """Return the indexed object attribute used for clarification."""
     return cand["object"].get("attributes", {}).get(key)
 
 
@@ -134,6 +147,16 @@ def choose_question(candidates, already_asked):
     if best_key is None:
         return None, []
     return best_key, _distinct(candidates, best_key)
+
+
+def format_question(key, options, candidate_count, turn):
+    """Build a varied clarification while keeping the indexed choices explicit."""
+    choices = " or ".join(str(option) for option in options)
+    prefix = f"I found {candidate_count} possible matches."
+    if len(options) == 1:
+        return f"{prefix} Was it the one with {options[0]}?"
+    prompt = QUESTION_VARIANTS.get(key, (KEY_QUESTIONS.get(key, key),))
+    return f"{prefix} {prompt[turn % len(prompt)]} ({choices})"
 
 
 def describe_place(scene, obj, prefer_anchor=None):
@@ -202,6 +225,15 @@ def describe_object(obj, candidate=None, wanted=None):
 
     bits = [attributes.get("color"), obj.get("type")]
     return " ".join(b for b in bits if b)
+
+
+def describe_not_found(parsed, scene_count):
+    """Explain that absence from the indexed photos is not proof of loss."""
+    request = parsed.describe()
+    scenes = "picture" if scene_count == 1 else "pictures"
+    return (f"I couldn't find a {request} in the {scene_count} available {scenes}. "
+            "It may be outside the photographed area, hidden from view, or in "
+            "a scene that has not been indexed yet.")
 
 
 class Session:
@@ -347,6 +379,32 @@ class Session:
         kept = {c["object"]["id"] for c in survivors}
         self.candidates = [c for c in self.candidates if c["object"]["id"] in kept]
 
+    def _volunteer(self, text, skip):
+        """Grab anything ELSE the user mentioned while answering a question.
+
+        People answer however they feel like: asked about the colour, they say
+        "it's black, and it's made of metal". The metal is real information -
+        take it for the attribute it names even though we did not ask, so it
+        never costs the user a second turn. Deliberately limited to the
+        askable attributes: location stays answer-only (see ASKABLE_KEYS).
+        """
+        if skip != "color" and "color" not in self.constraints:
+            colors = find_colors(text)
+            if colors:
+                self.constraints["color"] = colors[0]
+
+        words = set(re.findall(r"[a-z]+", text))
+        if skip != "size" and "size" not in self.constraints:
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
+                    break
+        if skip != "material" and "material" not in self.constraints:
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    break
+
     def _apply_answer(self, user_text):
         key, options = self.pending_key, self.pending_options
         self.pending_key, self.pending_options = None, []
@@ -361,13 +419,11 @@ class Session:
                     "몰라", "모르겠어", ""):
             return  # attribute burned, no constraint added
 
-        # Users answer whatever they feel like. If they mention a colour or a
-        # room while we were asking about something else, take it anyway instead
-        # of discarding a perfectly good clue.
-        if key != "color" and "color" not in self.constraints:
-            volunteered = find_colors(text)
-            if volunteered:
-                self.constraints["color"] = volunteered[0]
+        # Users answer whatever they feel like. Take any attribute they mention
+        # that we were NOT asking about, instead of discarding a good clue.
+        self._volunteer(text, skip=key)
+
+        words = set(re.findall(r"[a-z]+", text))
 
         if key != "location" and not self.parsed.location:
             room = parse(text, known_locations=self.index.locations()).location
@@ -391,12 +447,18 @@ class Session:
                 self.constraints["color"] = colors[0]
             return
 
-        if key == "location":
-            for option in options:
-                if option.lower() in text:
-                    self.parsed.location = option
+        # Accept any KNOWN size/material, not just the values we offered:
+        # "small" is a fine answer to "medium or large?".
+        if key == "size":
+            for size in SIZES:
+                if size in words:
+                    self.constraints["size"] = size
                     return
-            return
+        if key == "material":
+            for material in MATERIALS:
+                if material != "unknown" and material in words:
+                    self.constraints["material"] = material
+                    return
 
         # Only one value to offer, so it became a yes/no question.
         # "No" is just as informative as "yes" - it rules that value out.
@@ -441,21 +503,30 @@ class Session:
 
         if not self.candidates:
             if self.constraints:
-                # We over-filtered. Drop the newest constraint and be honest.
-                dropped = list(self.constraints)[-1]
-                self.constraints.pop(dropped)
-                self.candidates = find_candidates(
-                    self.index, self.parsed, self.constraints,
-                    top_k_scenes=self.top_k_scenes,
-                    merge_across_views=self.merge_across_views)
-                if self.candidates:
-                    return Reply(
-                        "giveup",
-                        f"I couldn't find anything matching that {dropped}. "
-                        f"Here is the closest I have for \"{self.parsed.describe()}\":",
-                        candidates=self.candidates[:3])
+                # We over-filtered. The newest constraint is usually the
+                # culprit (the answer to the last question), but a volunteered
+                # value can be inserted before it - so try dropping constraints
+                # one at a time, newest first, until something survives again.
+                for dropped in reversed(list(self.constraints)):
+                    value = self.constraints[dropped]
+                    trial = dict(self.constraints)
+                    trial.pop(dropped)
+                    refound = find_candidates(
+                        self.index, self.parsed, trial,
+                        top_k_scenes=self.top_k_scenes,
+                        merge_across_views=self.merge_across_views)
+                    if refound:
+                        self.constraints = trial
+                        self.candidates = refound
+                        label = (f"not {value[1]}" if is_negated(value)
+                                 else value)
+                        return Reply(
+                            "giveup",
+                            f"I couldn't find anything matching \"{label}\". "
+                            f"Here is the closest I have for \"{self.parsed.describe()}\":",
+                            candidates=refound[:3])
             return Reply("none_found",
-                         f"I couldn't find a {self.parsed.describe()} in any of the scenes I know.")
+                         describe_not_found(self.parsed, len(self.index.scenes)))
 
         if len(self.candidates) == 1:
             cand = self.candidates[0]
@@ -468,8 +539,8 @@ class Session:
         if self.turns >= self.max_turns:
             return Reply(
                 "giveup",
-                f"I still see {len(self.candidates)} possible matches and I've used my "
-                f"questions. Here are the most likely ones:",
+                f"I still see {len(self.candidates)} possible matches"
+                f" Here are the most likely ones:",
                 candidates=self.candidates[:3])
 
         key, options = choose_question(self.candidates, self.asked)
@@ -479,18 +550,7 @@ class Session:
         self.turns += 1
         self.pending_key, self.pending_options = key, options
 
-        if key == "location":
-            question = (f"I found {len(self.candidates)} possible matches. "
-                        f"Which room was it in - {' or '.join(options)}?")
-        elif key == "color":
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"What colour is yours - {' or '.join(options)}?"
-        elif len(options) == 1:
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"Was it the one with {options[0]}?"
-        else:
-            question = f"I found {len(self.candidates)} possible matches. " \
-                       f"{KEY_QUESTIONS.get(key, key)} ({' / '.join(str(o) for o in options)})"
+        question = format_question(key, options, len(self.candidates), self.turns - 1)
 
         return Reply("question", question, candidates=self.candidates,
                      asked_key=key, options=options)

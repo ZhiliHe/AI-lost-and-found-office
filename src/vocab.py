@@ -52,6 +52,7 @@ OBJECT_SYNONYMS = {
                    "external battery"],
     "tablet":     ["tablet", "ipad"],
     "watch":      ["watch", "smartwatch"],
+    "skateboard": ["skateboard", "board"],
 }
 
 # Fixtures. The prompt already says to ignore furniture, but a 2B model still

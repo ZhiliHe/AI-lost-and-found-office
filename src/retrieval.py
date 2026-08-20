@@ -298,6 +298,15 @@ def _satisfies(cand, wanted):
     for key, value in wanted.items():
         if value is None:
             continue
+
+        if key == "type":
+            # The type question answered "bottle or mug?" - EXACT match. The
+            # fuzzy groups only exist so the initial query surfaces candidates;
+            # once the user has said which one, a mug is not a bottle.
+            if cand["object"].get("type") != value:
+                return False
+            continue
+
         seen = observed.get(key) or ([attributes[key]] if attributes.get(key) else [])
 
         if is_negated(value):
