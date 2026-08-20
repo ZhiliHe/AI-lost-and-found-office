@@ -77,12 +77,14 @@ def test_full_clarification_converges(index, config):
     assert first.kind == "question"
 
     second = session.reply("black")
-    # Two black metal bottles remain, in different rooms. We do NOT ask which
-    # room - the user asked us where it is. Words are out, so we show photos.
-    assert second.kind == "choose"
-    assert len(second.candidates) >= 2
+    # Two black metal bottles remain, in different rooms - and unlike
+    # material/size (uniform in this fixture), location is a real,
+    # distinguishing signal here, so it's asked rather than falling straight
+    # to a photo pick.
+    assert second.kind == "question"
+    assert second.asked_key == "location"
 
-    final = session.reply("1")
+    final = session.reply(second.options[0])
     assert final.kind == "answer"
     assert final.candidates[0]["object"]["id"] == second.candidates[0]["object"]["id"]
 
@@ -106,9 +108,8 @@ def test_dont_know_does_not_add_a_constraint(index, config):
 def test_unknown_object_is_reported_not_guessed(index, config):
     reply = Session(index, config).start("where is my skateboard")
     assert reply.kind == "none_found"
-    assert "available pictures" in reply.text
+    assert "I couldn't find a skateboard" in reply.text
     assert "outside the photographed area" in reply.text
-    assert "not found in indexed data" in reply.text
 
 
 def test_unseen_attribute_is_reported_as_absent_from_pictures(index, config):
@@ -122,6 +123,107 @@ def test_unseen_relation_is_reported_as_absent_from_pictures(index, config):
     reply = Session(index, config).start("find the bottle beside the umbrella")
     assert reply.kind == "none_found"
     assert "bottle beside the umbrella" in reply.text
+
+
+# --- "not found" says what was actually searched ---------------------------- #
+
+def _project_layout(tmp_path):
+    """A throwaway <root>/data/images/<location>/ tree, matching the real
+    layout (config.yaml's paths.images is always "data/images"), so
+    unindexed_photo_count can derive project_root from images_root alone."""
+    images_root = tmp_path / "data" / "images"
+    (images_root / "office").mkdir(parents=True)
+    return images_root
+
+
+def test_unindexed_photo_count_is_zero_when_everything_is_indexed(tmp_path):
+    from src.retrieval import SceneIndex
+
+    images_root = _project_layout(tmp_path)
+    (images_root / "office" / "front.jpg").write_bytes(b"x")
+
+    idx = SceneIndex({"version": 1, "scenes": [
+        {"scene_id": "office_front", "location": "office",
+         "image_path": "data/images/office/front.jpg",
+         "width": 10, "height": 10, "objects": [], "relations": []},
+    ]})
+    count, missing = idx.unindexed_photo_count(images_root)
+    assert count == 0
+    assert missing == []
+
+
+def test_unindexed_photo_count_finds_photos_never_indexed(tmp_path):
+    from src.retrieval import SceneIndex
+
+    images_root = _project_layout(tmp_path)
+    (images_root / "office" / "front.jpg").write_bytes(b"x")
+    (images_root / "office" / "office_table_01.jpg").write_bytes(b"x")
+    (images_root / "Home").mkdir()
+    (images_root / "Home" / "home_desk_01.jpg").write_bytes(b"x")
+
+    idx = SceneIndex({"version": 1, "scenes": [
+        {"scene_id": "office_front", "location": "office",
+         "image_path": "data/images/office/front.jpg",
+         "width": 10, "height": 10, "objects": [], "relations": []},
+    ]})
+    count, missing = idx.unindexed_photo_count(images_root)
+    assert count == 2
+    assert set(missing) == {"office/office_table_01.jpg", "Home/home_desk_01.jpg"}
+
+
+def test_describe_not_found_names_unindexed_photos():
+    from src.agent import describe_not_found
+    from src.query_parser import parse
+
+    parsed = parse("where is my bottle")
+    text = describe_not_found(parsed, scene_count=2, unindexed=(3, ["Home/a.jpg", "Home/b.jpg", "office/c.jpg"]))
+    assert "3 unindexed photos" in text
+    assert "Home/a.jpg" in text
+
+
+def test_describe_not_found_says_search_was_exhaustive_when_nothing_is_missing():
+    from src.agent import describe_not_found
+    from src.query_parser import parse
+
+    parsed = parse("where is my bottle")
+    text = describe_not_found(parsed, scene_count=2, unindexed=(0, []))
+    assert "not been indexed yet" not in text
+    assert "outside the photographed area" in text
+
+
+def test_describe_not_found_stays_vague_when_unindexed_is_unknown():
+    """Backward compatible: a caller that never checks (unindexed=None, the
+    default) gets the same generic hedge as the "checked, nothing missing"
+    case - not a claim naming specific unindexed photos that were never
+    actually looked for."""
+    from src.agent import describe_not_found
+    from src.query_parser import parse
+
+    parsed = parse("where is my bottle")
+    text = describe_not_found(parsed, scene_count=2)
+    assert "outside the photographed area" in text
+    assert "unindexed" not in text
+
+
+def test_session_reports_unindexed_photos_end_to_end(tmp_path):
+    """Session wires images_root from config.paths.images through to the
+    not-found message automatically."""
+    from src.retrieval import SceneIndex
+
+    images_root = _project_layout(tmp_path)
+    (images_root / "office" / "front.jpg").write_bytes(b"x")
+    (images_root / "office" / "office_table_01.jpg").write_bytes(b"x")
+
+    idx = SceneIndex({"version": 1, "scenes": [
+        {"scene_id": "office_front", "location": "office",
+         "image_path": "data/images/office/front.jpg",
+         "width": 10, "height": 10, "objects": [], "relations": []},
+    ]})
+    cfg = {"agent": {"max_clarify_turns": 3, "top_k_scenes": 5},
+           "paths": {"images": str(images_root)}}
+    reply = Session(idx, cfg).start("where is my skateboard")
+    assert reply.kind == "none_found"
+    assert "office_table_01.jpg" in reply.text
 
 
 def test_no_object_named_asks_for_the_object(index, config):
@@ -152,19 +254,15 @@ def test_choose_question_skips_already_asked(index):
     assert key != "color"
 
 
-def test_location_is_never_asked_about(index):
-    """The user asked "where is it?" - answering "which room was it in?" hands
-    the question back to them. The room is what we are supposed to work out, so
-    it is answer-only: taken if volunteered, never asked for.
-
-    When the attributes run out we show photos instead (see the pick tests)."""
+def test_location_is_lower_priority_than_color(index):
+    """Location IS askable ("which room was it in?" is one of the things
+    people remember best), but only as a lower-priority fallback - colour
+    outranks it (KEY_PRIOR: color 1.3 vs location 0.8) whenever both would
+    otherwise provide a real signal, which they do for this fixture (two
+    rooms, two colours)."""
     candidates = find_candidates(index, parse("where is my bottle"))
-    key, _ = choose_question(candidates, already_asked=["color", "size", "material"])
-    assert key is None
-
-    for asked in ([], ["color"], ["color", "size"]):
-        key, _ = choose_question(candidates, already_asked=asked)
-        assert key != "location", asked
+    key, _ = choose_question(candidates, already_asked=[])
+    assert key == "color"
 
 
 def test_candidate_comparison_is_concise(index):
@@ -205,6 +303,103 @@ def test_low_confidence_single_candidate_asks_for_confirmation(config):
     assert reply.kind == "question"
     assert reply.confidence == "low"
     assert reply.asked_key == "confirm_candidate"
+
+
+# --- the "near" spatial clarifying question --------------------------------- #
+
+@pytest.fixture
+def near_index():
+    """Two identical black bottles on one desk - same colour, material and
+    size, so nothing but their spatial neighbour tells them apart. One sits
+    beside a laptop, the other beside a backpack, far enough apart that
+    neither is "near" the other's neighbour."""
+    from src.retrieval import SceneIndex
+    from src.spatial import compute_relations
+    objects = [
+        {"id": "o_laptop", "type": "laptop",
+         "attributes": {"color": "silver", "material": "metal", "size": "large"},
+         "bbox": [500, 500, 1500, 1200], "confidence": 0.95},
+        {"id": "o_bottle1", "type": "bottle",
+         "attributes": {"color": "black", "material": "metal", "size": "medium"},
+         "bbox": [1550, 600, 1750, 1100], "confidence": 0.9},
+        {"id": "o_backpack", "type": "backpack",
+         "attributes": {"color": "black", "material": "fabric", "size": "large"},
+         "bbox": [2800, 500, 3600, 1400], "confidence": 0.9},
+        {"id": "o_bottle2", "type": "bottle",
+         "attributes": {"color": "black", "material": "metal", "size": "medium"},
+         "bbox": [3650, 600, 3850, 1100], "confidence": 0.9},
+    ]
+    scene = {"scene_id": "office_01", "location": "office",
+             "image_path": "data/images/office/office_01.jpg",
+             "width": 4032, "height": 3024, "caption": "a desk",
+             "objects": objects, "relations": compute_relations(objects, (4032, 3024))}
+    return SceneIndex({"version": 1, "scenes": [scene]})
+
+
+def test_near_value_reads_the_computed_relation(near_index):
+    from src.agent import _value_of
+    candidates = find_candidates(near_index, parse("where is my bottle"))
+    values = {c["object"]["id"]: _value_of(c, "near") for c in candidates}
+    assert values["o_bottle1"] == "laptop"
+    assert values["o_bottle2"] == "backpack"
+
+
+def test_choose_question_picks_near_when_it_is_the_only_signal(near_index):
+    """Both bottles are black/metal/medium - identical on every attribute
+    ASKABLE_KEYS had before "near" existed. Only the neighbour differs."""
+    candidates = find_candidates(near_index, parse("where is my bottle"))
+    key, options = choose_question(candidates, already_asked=[])
+    assert key == "near"
+    assert set(options) == {"laptop", "backpack"}
+
+
+def test_near_answer_resolves_the_ambiguity(near_index, config):
+    session = Session(near_index, config)
+    reply = session.start("where is my bottle")
+    assert reply.kind == "question"
+    assert reply.asked_key == "near"
+
+    final = session.reply("it was near the laptop")
+    assert final.kind == "answer"
+    assert final.candidates[0]["object"]["id"] == "o_bottle1"
+
+
+def test_near_constraint_filters_at_the_retrieval_level(near_index):
+    from src.vocab import negate
+    near_laptop = find_candidates(near_index, parse("where is my bottle"),
+                                  constraints={"near": "laptop"})
+    assert [c["object"]["id"] for c in near_laptop] == ["o_bottle1"]
+
+    not_near_laptop = find_candidates(near_index, parse("where is my bottle"),
+                                      constraints={"near": negate("laptop")})
+    assert [c["object"]["id"] for c in not_near_laptop] == ["o_bottle2"]
+
+
+def test_near_is_only_volunteered_with_an_explicit_relation_word(index, config):
+    """"a metal charger" must not volunteer near=charger - that names the lost
+    object itself, not a neighbour. "near my laptop" should.
+
+    Calls _apply_answer directly (same pattern as
+    test_a_volunteered_room_is_kept_even_when_we_asked_something_else below),
+    bypassing Session.reply()'s new-question detector rather than going
+    through it: "black, it's a metal charger" mentions "charger", a different
+    object type than "bottle", which Session.reply() would otherwise (quite
+    reasonably) treat as the start of a brand new search and reset the whole
+    session - wiping constraints before _volunteer() ever got a chance to
+    matter, which would make this test pass even with a broken guard. Going
+    through _apply_answer directly keeps this a tight test of _volunteer()'s
+    "near" case specifically."""
+    session = Session(index, config)
+    session.start("where is my bottle")
+    session.pending_key, session.pending_options = "color", ["black", "blue"]
+    session._apply_answer("black, it's a metal charger")
+    assert "near" not in session.constraints
+
+    session2 = Session(index, config)
+    session2.start("where is my bottle")
+    session2.pending_key, session2.pending_options = "color", ["black", "blue"]
+    session2._apply_answer("black, near my laptop")
+    assert session2.constraints.get("near") == "laptop"
 
 
 # --- multiple camera angles of the same place ------------------------------ #

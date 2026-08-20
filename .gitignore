@@ -13,3 +13,7 @@ data/debug/
 # Images: commit them only if the repo stays small. Otherwise share separately.
 models/
 _to_delete/
+
+# Local planning/handoff notes, not a project deliverable.
+DAY2_PLAN.md
+SESSION_SUMMARY.md

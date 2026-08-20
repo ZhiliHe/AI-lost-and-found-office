@@ -16,7 +16,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from src.agent import PICK_KEY, Session          # noqa: E402
+from src.agent import PICK_KEY, SAFE_PREDICATES, Session, nearest_anchor_type  # noqa: E402
 from src.config import load_config     # noqa: E402
 from src.retrieval import SceneIndex   # noqa: E402
 from src.query_parser import parse     # noqa: E402
@@ -52,6 +52,18 @@ def answer_as_the_user(reply, scene, obj):
 
     if key == "location":
         return scene.get("location", "i don't know")
+
+    # "near" isn't stored in attributes (it's a computed spatial relation, see
+    # agent.nearest_anchor_type), so without this the generic value = obj.get(
+    # "attributes", {}).get(key) below always sees None and every simulated
+    # user answers "i don't know" - which would fail any eval case whose
+    # target can only be resolved by asking about a neighbour.
+    if key == "near":
+        anchor, _ = nearest_anchor_type(scene, obj, predicate_order=SAFE_PREDICATES)
+        options = reply.options or []
+        if len(options) == 1:
+            return "yes" if anchor == options[0] else "no"
+        return anchor if anchor else "i don't know"
 
     value = obj.get("attributes", {}).get(key)
     options = reply.options or []

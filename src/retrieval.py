@@ -10,7 +10,7 @@ and it costs zero memory - which matters on an 8GB laptop. If you want CLIP
 later, add it as an EXTRA scene score here; do not replace this.
 """
 
-from .spatial import alternatives_for
+from .spatial import CAMERA_INVARIANT, alternatives_for
 from .vocab import FUZZY_TYPE_GROUPS, OBJECT_SYNONYMS, is_negated
 
 HIGH_CONFIDENCE = 0.82
@@ -64,6 +64,46 @@ class SceneIndex:
             "failures": self.payload.get("failures", []) or self.payload.get("index_failures", []),
             "total_photos": len(self.scenes),
         }
+
+    def unindexed_photo_count(self, images_root):
+        """How many image files under `images_root` are NOT referenced by any
+        scene's image_path, and their paths relative to images_root. Returns
+        None (NOT (0, [])) if `images_root` doesn't exist, so a caller can
+        tell "checked, found nothing missing" apart from "couldn't check at
+        all" - conflating those would let a stale/misconfigured paths.images
+        claim an exhaustive search that never actually ran.
+
+        Lets a "not found" message say what was actually searched instead of
+        hedging with a "may not be indexed yet" caveat that might not be true.
+        `images_root` should be the same directory the indexer reads from
+        (config paths.images). image_path values in the index are stored
+        project-root-relative (see src.indexer._repo_relative); the project
+        root is derived as images_root's grandparent (config.yaml always sets
+        paths.images to "data/images"), rather than importing src.config, so
+        this works against any images_root - including a throwaway one built
+        in a test - without needing to BE the real project layout on disk.
+        """
+        from pathlib import Path
+
+        images_root = Path(images_root)
+        if not images_root.exists():
+            return None
+        project_root = images_root.parent.parent
+
+        indexed = set()
+        for scene in self.scenes:
+            path = scene.get("image_path")
+            if path:
+                indexed.add((project_root / path).resolve())
+
+        exts = {".jpg", ".jpeg", ".png"}
+        missing = []
+        for file in sorted(images_root.rglob("*")):
+            if file.is_file() and file.suffix.lower() in exts \
+                    and file.resolve() not in indexed:
+                missing.append(file.relative_to(images_root).as_posix())
+
+        return len(missing), missing
 
 
 def score_scene(scene, parsed):
@@ -122,17 +162,52 @@ def _type_matches(obj_type, wanted):
     return wanted in OBJECT_SYNONYMS.get(obj_type, [])
 
 
-def _relation_holds(scene, subject_id, predicate, anchor_type):
+def _has_relation_to_type(scene, subject_id, accepted_predicates, anchor_type,
+                          exclude_same_type_as=None):
+    """Does `subject_id` have a relation, whose predicate is in
+    `accepted_predicates`, to any object of `anchor_type` in this scene?
+    Shared triple-walk behind both _relation_holds and _near_type below.
+
+    `exclude_same_type_as`, if given, drops anchor candidates that share this
+    type - used so a volunteered "near another bottle" constraint (searching
+    for a bottle) can't match a different bottle instance. compute_relations
+    never emits a triple where subject == object, so this is about two
+    DIFFERENT objects of the same TYPE, not the subject matching itself.
+    """
     anchors = {o["id"] for o in scene.get("objects", [])
-               if _type_matches(o.get("type"), anchor_type)}
+               if _type_matches(o.get("type"), anchor_type)
+               and o.get("type") != exclude_same_type_as}
     if not anchors:
         return False
-    accepted = alternatives_for(predicate)
     for triple in scene.get("relations", []):
-        if triple["subject"] == subject_id and triple["predicate"] in accepted \
+        if triple["subject"] == subject_id and triple["predicate"] in accepted_predicates \
                 and triple["object"] in anchors:
             return True
     return False
+
+
+def _relation_holds(scene, subject_id, predicate, anchor_type):
+    return _has_relation_to_type(scene, subject_id, alternatives_for(predicate), anchor_type)
+
+
+def _near_type(scene, subject_id, anchor_type):
+    """Does `subject_id` have ANY camera-invariant relation (near/beside/on/
+    inside) to an object of `anchor_type` in this scene? Used to answer the
+    agent's "near" clarifying question - deliberately looser than
+    _relation_holds, which checks one specific predicate (plus its
+    alternatives) the user named; here the user is only confirming a
+    neighbour, not a precise relation, so any camera-invariant predicate
+    counts.
+
+    Excludes same-type anchors (see _has_relation_to_type), matching
+    agent.nearest_anchor_type's `anchor == mine: continue` - retrieval must
+    not accept a "near" constraint the question-generation path could never
+    have offered in the first place.
+    """
+    subject_type = next((o.get("type") for o in scene.get("objects", [])
+                         if o.get("id") == subject_id), None)
+    return _has_relation_to_type(scene, subject_id, CAMERA_INVARIANT, anchor_type,
+                                 exclude_same_type_as=subject_type)
 
 
 def _view_quality(cand):
@@ -349,6 +424,25 @@ def _satisfies(cand, wanted):
             # fuzzy groups only exist so the initial query surfaces candidates;
             # once the user has said which one, a mug is not a bottle.
             if cand["object"].get("type") != value:
+                return False
+            continue
+
+        if key == "near":
+            # Spatial relations live on the scene, not in attributes/observed,
+            # and (unlike color/material/size) are only checked against the
+            # single winning reference view after merging - see
+            # merge_views()'s own note on under-counting across angles.
+            negated = is_negated(value)
+            # NOT "rejected or value": that silently breaks if a negated
+            # payload were itself falsy (negate("") -> ("not", "")), since
+            # `or` would then fall through to the whole 2-tuple instead of
+            # the anchor type. An explicit ternary has no such edge case.
+            anchor_type = value[1] if negated else value
+            is_near = _near_type(cand["scene"], cand["object"]["id"], anchor_type)
+            if negated:
+                if is_near:
+                    return False
+            elif not is_near:
                 return False
             continue
 
