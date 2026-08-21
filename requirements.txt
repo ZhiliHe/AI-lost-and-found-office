@@ -22,20 +22,32 @@ pytest>=8.0
 # NVIDIA / CPU:
 #   pip install -U "transformers>=4.57" torch accelerate qwen-vl-utils jinja2
 #
-# --- CUDA acceleration (backend: cuda in config.yaml) ------------------------
-#
-# The torch wheel on the PyPI default index is a CPU-only build and will NOT
-# see your GPU. On an NVIDIA machine install the CUDA wheel first, then the
-# rest, then set `backend: cuda` in config.yaml:
-#
-#   pip install torch --index-url https://download.pytorch.org/whl/cu128
-#   pip install -U "transformers>=4.57" accelerate qwen-vl-utils jinja2
-#   pip install flash-attn --no-build-isolation    # optional: Flash Attention
-#                                                  # (falls back to sdpa if absent)
-#
-# Check it worked:  python -c "import torch; print(torch.cuda.is_available())"
-# The indexer then prints the GPU name and runs images in batches
-# (vlm.batch_size) - 2-4 images per generation call instead of one.
-#
 # If you are working on the agent, retrieval or the UI you need NEITHER.
 # Run `python scripts/make_dummy_index.py` and develop against that.
+
+# --- speech (optional): the demo works by keyboard without any of this -------
+#
+#   pip install sounddevice
+#   pip install mlx-whisper --no-deps          # Apple Silicon
+#   pip install numpy scipy tqdm more-itertools tiktoken huggingface_hub
+#
+# --no-deps is deliberate. mlx-whisper declares numba and torch as hard
+# requirements but uses numba in exactly one place - two @numba.jit functions
+# for WORD-level timestamps, which a plain transcription never calls - and
+# torch only in a weights-conversion path we never touch. There is no numba
+# wheel for Python 3.14, so a normal install fails outright and speech dies for
+# a reason that has nothing to do with speech. src/voice.py stands in a no-op
+# decorator, and only when the real numba is genuinely absent.
+#
+# Speaking uses macOS's built-in `say` - no install, no download, no network,
+# and it has good Korean and Chinese voices. Check yours with:
+#
+#   python -m src.voice
+#
+# The Whisper model is ~480MB. Fetch it once and point at the local copy so the
+# demo never touches the network:
+#
+#   mkdir -p models/whisper-small-mlx && cd models/whisper-small-mlx
+#   curl -L -C - -O https://huggingface.co/mlx-community/whisper-small-mlx/resolve/main/config.json
+#   curl -L -C - -O https://huggingface.co/mlx-community/whisper-small-mlx/resolve/main/weights.npz
+#   export WHISPER_MODEL=$PWD                 # or a smaller: whisper-base-mlx

@@ -4,19 +4,25 @@ A multimodal agent that finds personal belongings in photos of rooms, and — th
 is the point — **asks a question instead of guessing** when the request is
 ambiguous.
 
+You talk to it, in English, Korean or Chinese, and it answers in the language you
+used:
+
 ```
-You:   Where is my bottle?
-Agent: I found 6 possible matches. Which room was it in - office or classroom or meeting?
-You:   office
-Agent: I found 3 possible matches. What colour is yours - black or blue or white?
-You:   black
-Agent: Found it - the black bottle is in the office, beside the laptop.
+You:   Hey Lopa
+Lopa:  한국어  네, 듣고 있습니다 — 찾으시는 물건을 말씀해 주세요
+       English  Listening — say what you lost
+       中文  在听 — 请说出您要找的东西
+You:   내 물병 어딨어?
+Lopa:  10개를 찾았습니다. 무슨 색인가요? (파란색 아니면 투명한 아니면 초록색 …)
+You:   초록색
+Lopa:  2개를 찾았습니다. 어디에 두셨나요? (7층 탕비실 아니면 6층 회의실)
+You:   탕비실
+Lopa:  찾았습니다. 초록색 물병이 7층 탕비실에서 휴대폰 근처에 있습니다.
 ```
 
-(That is a real transcript against the dummy index — reproduce it with the three
-commands below.)
-
-The photo opens automatically with the answer boxed in red.
+The photo opens alongside the answer with the object boxed in red. The candidate
+list shrinking — 10, then 2, then 1 — is the demo: that narrowing is the part a
+retrieval system cannot do.
 
 ---
 
@@ -36,9 +42,10 @@ and keep working unchanged when the real photos arrive.
 Then:
 
 ```bash
-python -m pytest -q        # 65 tests
-python eval/run_eval.py    # the evaluation table for the report
-python -m src.app          # optional Gradio UI (the CLI already shows photos)
+python -m pytest -q         # 173 tests
+python eval/run_eval.py     # the conversation evaluation, for the report
+python eval/run_recall.py   # the indexer measured against the ground truth
+python -m src.app           # the demo UI - speak to it, or type
 ```
 
 ---
@@ -66,6 +73,24 @@ user query ──► parse ──► rank scenes ──► merge views ◄──
                                                    │
                                             (back to ambiguous?)   ×3 max
 ```
+
+Speech wraps that loop without entering it:
+
+```
+microphone ──► phrase ends on silence ──► Whisper (en | ko | zh only)
+                                               │
+                                        "Hey Lopa"? ──no──► ignored
+                                               │ yes
+                                          the loop above
+                                               │
+                       reply STRUCTURE ──► i18n ──► sentence in that language
+                                               │              │
+                                          photo on screen   say
+```
+
+`i18n.py` renders the reply's structure - kind, candidates, what was asked - so
+the answer is built in the target language rather than translated from English.
+Nothing in the shell can change which candidates match or whether to ask.
 
 ---
 
@@ -139,17 +164,6 @@ weighted by how reliably a human can answer it (people remember colour and which
 room far better than they remember material). That makes the clarification
 behaviour deterministic, explainable and unit-testable.
 
-The agent can ask about colour, room, size, material **and object type**. A
-"notebook" query legitimately spans laptops and paper notebooks, and a "bottle"
-query can surface mugs (see `vocab.py`), so when the candidate set mixes types
-the agent asks *which one* — nothing else can separate a black laptop from a
-black notebook. Answers are not restricted to the offered options either: say
-"meeting" when asked "office or classroom?", or volunteer extra details while
-answering ("it's in the office, and it's black") — every usable word is taken,
-so a good answer never costs a second turn. If the user's constraints rule
-everything out, the agent drops the impossible one (not blindly the newest) and
-honestly shows the closest matches instead of dead-ending.
-
 ---
 
 ## Attributes: what survived, and why
@@ -166,12 +180,115 @@ attribute, because it costs one of only three questions.**
 | `brand_or_logo` | **removed** | the model read a lululemon bottle as "lifeforce" and invented logos that were not there. Hallucinated logos also split one object into two across angles |
 | `state` | **removed** | meaningless for most objects — it reported a phone as "closed". "Was your backpack open?" is not answerable about something you lost |
 
-`location` was promoted to a first-class question rather than a last resort.
-Which room someone left something in is one of the things people remember best,
-and it is often the single most discriminating thing we can ask. Doing this
-dropped the average number of questions from 1.8 to 1.2.
+Which question gets asked is `(how well it splits the candidates) x (how
+reliably a human can answer it)`. The second factor is what most of the tuning
+went into: a question that divides the set perfectly but that nobody can answer
+is worse than a blunter one, because they say "I don't know" and the turn is
+spent for nothing.
+
+Colour is asked first — it is the one property people picture immediately.
+`location` comes next: "which room did you have it in?" is a real memory, and it
+is the only key that cannot be wrong on our side either, since it is the folder
+the photograph came from rather than something the model guessed. It does *not*
+come first, because the person is asking us where their thing is; opening with
+"which room was it in?" hands them back their own question.
+
+`near` was demoted below both. Not because the geometry is unreliable — it is
+computed in `spatial.py` and is as solid as anything we have — but because
+"was it next to a charger or an umbrella?" asks someone to recall the furniture
+around an object they have already lost. Making that swap moved resolution
+accuracy from 88% to 92% and dropped the average number of questions from 1.7 to
+1.5.
 
 ---
+
+## Talking to it
+
+```bash
+python -m src.voice                  # check the microphone and voices FIRST
+python -m src.app                    # browser: speak, or type
+python -m src.jarvis --wake          # terminal: no buttons at all
+```
+
+Speech is optional — everything works by keyboard without it. See
+`requirements.txt` for what to install and why the Whisper install needs
+`--no-deps`. Run `python -m src.voice` the day before, not five minutes before:
+a missing voice reads Korean with an English accent, an undownloaded model
+stalls for a minute, and a muted microphone hears nothing — all of which look
+identical to a broken system from the audience.
+
+Open the page and the microphone starts itself — Chrome asks for permission once
+and remembers. Say **"Hey Lopa"** and it wakes; say what you lost and it answers
+out loud, in the language you asked in, with the photo on screen.
+
+Nothing here touches `agent.py`. Speech is a shell around the same deterministic
+state machine, so the demo can be as forgiving as it likes without any of that
+leaking into the logic the report has to defend.
+
+**Whisper transcribes, it does not translate.** "내 가방 어딨어?" arrives as
+Korean text, which is exactly what we want: `vocab.py` knows Korean, and
+`i18n.py` answers in Korean. Its language choice is restricted to the three we
+support — left free it decides a short Korean phrase was Malay, transcribes it as
+such, and nothing matches for a reason nothing on screen can explain.
+
+**Answers are rebuilt, not translated.** The agent produces about seven sentence
+shapes, so `i18n.py` renders each one per language from the reply's *structure*.
+That is instant where a translation call is not, it says the same thing every
+time, and it can never invent a room name that is not in the index. Korean
+particles (이/가, 을/를) are chosen from the final consonant of the preceding
+word — "마우스이" is the clearest possible sign a sentence was assembled by a
+machine.
+
+**The wake word is a family of spellings, not one.** "Lopa" is not a word in
+Korean or Chinese, so Whisper picks whichever characters sound right and picks
+differently every time — 嘿罗帕, then 嘿洛趴, then 嘿罗怕. Chasing spellings is a
+losing game, so the *syllables* are listed and every combination is generated.
+Traditional characters are folded to simplified on the way in for the same
+reason: Whisper chooses a script per utterance, the speaker does not.
+
+**The microphone stays open; the wake word gates acting, not listening.** During
+a five-minute presentation you talk constantly — explaining slides, answering
+questions. Without a gate all of that becomes a search.
+
+---
+
+## Pointing instead of describing
+
+Every question arrives as a numbered list on screen, so it can be answered the
+way people answer lists — by number, by order, or by side, in any of the three
+languages:
+
+```
+2  ·  두 번째  ·  第二个  ·  the second one  ·  오른쪽 거  ·  最右  ·  the left one
+```
+
+Clicking a photo does the same thing. Pointing is the most direct answer
+available — shorter than any sentence, impossible to mishear, and the same
+gesture in every language.
+
+When words run out entirely — two laptops the indexer described identically —
+the agent stops asking and shows the photos instead. That is a different
+*action*, not a different question, and it is the one channel still open when
+every attribute has been spent.
+
+---
+
+## Listing instead of narrowing
+
+```
+You:   물병 전체를 나열해줘        ·  list all the bottles  ·  所有的水瓶
+Lopa:  물병 12개를 찾았습니다:
+       1. 파란색 물병 - 6층 회의실
+       2. 투명한 물병 - 7층 탕비실
+       …
+```
+
+The whole agent exists to *reduce* a candidate set; this asks for the opposite,
+so it is a mode rather than a longer answer — clarifying here would answer a
+question nobody asked. A list is also held to a stricter standard than a
+shortlist: it searches every scene rather than the top-ranked few, and it drops
+the look-alike groups that are useful while narrowing. "All 11 umbrellas"
+containing seven backpacks is not a fuzzy match, it is a wrong answer.
 
 ## Optional: query-time VLM verification
 
@@ -197,20 +314,26 @@ verification can never empty the result set — turning a findable object into
 ```
 config.yaml                model, paths, thresholds — the only place to edit
 src/
-  vlm.py                   backend adapter: mlx | transformers | cuda | dummy
+  vlm.py                   backend adapter: mlx | transformers | dummy
   prompts.py               scene-extraction prompt + its tuning log
   indexer.py               photos  -> data/scene_index.json     (offline, slow)
   spatial.py               boxes   -> relations                 (pure geometry)
-  vocab.py                 controlled colour / object vocabulary
+  vocab.py                 controlled vocabulary, in three languages
+  i18n.py                  reply structure -> a sentence, per language
+  voice.py                 microphone in, speech out, wake word
+  jarvis.py                the spoken demo (terminal, no buttons)
   query_parser.py          text    -> structured query
   retrieval.py             query   -> ranked scenes -> merged candidates
   agent.py                 the clarification state machine
   verify.py                optional query-time VLM re-check
   visualize.py             draw boxes back onto photos          ← run this early
   cli.py                   terminal chat (opens result photos)
-  app.py                   Gradio demo
+  app.py                   the demo UI - speech, photos, candidate gallery
 scripts/make_dummy_index.py
-eval/run_eval.py           the evaluation deliverable
+eval/
+  truth.py                 resolves a described answer against today's index
+  run_eval.py              the conversation evaluation
+  run_recall.py            the indexer, measured against the ground truth
 tests/                     pytest
 data/
   images/<location>/<name>.jpg
@@ -297,61 +420,6 @@ attributes and retrieval silently degrades.
 
 ---
 
-## CUDA acceleration (NVIDIA)
-
-The `cuda` backend runs the same transformers models on an NVIDIA GPU, but
-with the knobs that actually matter:
-
-- **Forced GPU** — it never silently falls back to CPU; it fails loudly and
-  tells you how to fix it instead of grinding through 40 images at CPU speed.
-- **Half precision** (`float16`, ~2× faster than fp32) with `bfloat16` for
-  Ampere+ cards and larger models.
-- **Flash Attention** when available, with an automatic `sdpa` fallback — you
-  never have to know which one your machine supports.
-- **Batched indexing** — `vlm.batch_size: 2` sends 2 images through one
-  `generate()` call. Generation is GPU-bound, so a batch of 2–4 images costs
-  barely more than one; this is the single biggest CUDA speedup for indexing.
-- **Optional `torch.compile`** (`vlm.compile: true`) — slow first call, faster
-  everything after.
-
-Setup (one time):
-
-```bash
-pip install torch --index-url https://download.pytorch.org/whl/cu128   # CUDA torch
-pip install -U "transformers>=4.57" accelerate qwen-vl-utils jinja2
-pip install flash-attn --no-build-isolation      # optional; sdpa is the fallback
-python -c "import torch; print(torch.cuda.is_available())"   # must print True
-```
-
-Then edit `config.yaml`:
-
-```yaml
-vlm:
-  backend: cuda
-  model: Qwen/Qwen2-VL-2B-Instruct
-  dtype: float16          # auto also means float16 on the cuda backend
-  batch_size: 2           # images per generation call; 4 on a 16 GB+ card
-```
-
-You know it is actually on the GPU because the indexer prints a banner:
-
-```
-CUDA backend ready: NVIDIA GeForce RTX 4070 (compute 8.9, 12.0 GB VRAM, 10.2 GB free)
-  device=cuda:0 dtype=torch.float16 attention=sdpa compile=off
-CUDA batching: 2 images per generation call (vlm.batch_size)
-```
-
-(If `attention=sdpa`, flash-attn is not installed — that is fine, SDPA is
-already a large speedup over eager.) While indexing runs, `nvidia-smi` shows
-the model using VRAM.
-
-`backend: transformers` remains the "just make it work" option: on a CUDA
-machine it also lands on the GPU (via `device_map="auto"`) but without half
-precision, Flash Attention or batching. Nothing else in the repo changes —
-`cuda` and `transformers` produce identical index JSON.
-
----
-
 ## Platform notes
 
 Everything except the VLM backend is pure Python and runs on macOS, Linux and
@@ -359,10 +427,8 @@ Windows. Two things to know:
 
 - **Windows and Linux cannot use the `mlx` backend** — it is Apple Silicon only.
   Use `backend: transformers` (`pip install -U "transformers>=4.57" torch
-  accelerate qwen-vl-utils jinja2`) for CPU or auto-detected CUDA, or the
-  `cuda` backend below for explicit NVIDIA acceleration. Or skip indexing
-  entirely: `scene_index.json` is committed, so the agent, retrieval, UI and
-  tests all run with no model.
+  accelerate qwen-vl-utils jinja2`), or skip indexing entirely: `scene_index.json`
+  is committed, so the agent, retrieval, UI and tests all run with no model.
 - **Paths in the index are always POSIX-style** (`data/images/office/x.jpg`),
   written with `as_posix()` on every platform. A Windows machine writing
   `data\images\office\x.jpg` into the shared index would break every Mac and
@@ -403,22 +469,51 @@ The demo lives or dies on the photos, so shoot deliberately:
 ## Evaluation
 
 ```bash
-python eval/run_eval.py
+python eval/run_eval.py       # the conversation
+python eval/run_recall.py     # the index underneath it
 ```
 
-Cases live in `eval/test_queries.json`. Answers are **derived from the ground-truth
-target object**, not hardcoded strings — so renaming a room or dropping an
-attribute does not silently break the suite. Current numbers on the dummy index:
+Two different questions, deliberately kept apart.
+
+**`run_eval.py` measures the conversation.** Cases live in
+`eval/test_queries.json` and each one *describes* its answer — place, kind,
+colour — in the same words as `data/ground_truth.json`, which `eval/truth.py`
+then resolves against whatever the index holds today. The first version named
+expected objects by id; ids are assigned by the indexer, so the day the photos
+were re-indexed the suite reported 10% while nothing was actually broken. An
+evaluation that breaks when you re-run the system it evaluates is worse than
+none — it teaches you to ignore it.
 
 | metric | value |
 | --- | --- |
-| Resolution accuracy | 10/10 |
-| Clarification rate | 3/3 ambiguous queries triggered a question |
-| False answers | 0 (a top-1 retrieval baseline scores 3) |
-| Avg questions asked | 1.2 |
+| Resolution accuracy | 24/26 (92%) |
+| Clarification rate | 6/6 ambiguous queries triggered a question |
+| **False answers** | **0** (a top-1 retrieval baseline scores 6) |
+| Avg questions asked | 1.5 |
 
-"False answers" is the metric that matters: a system that confidently returns
-the wrong bottle is worse than one that asks.
+**False answers is the metric that matters.** A system that confidently returns
+the wrong bottle is worse than one that asks, and it is the number a pure
+retrieval baseline cannot improve.
+
+**`run_recall.py` measures the layer underneath** — the index itself, against 59
+hand-checked objects.
+
+| metric | value |
+| --- | --- |
+| Object recall | 58/59 (98%) |
+| Attribute recall | 50/59 (85%) — found *and* the right colour |
+| Reachable by name | 58/59 (98%) — found *and* the vocabulary has a word for it |
+
+The gap between the first two rows is the point. High recall with low attribute
+accuracy means the model sees things and describes them badly — a prompt or
+vocabulary problem. Both low means it is not seeing them at all — a resolution
+problem, which is what tiling addresses. From inside the agent those two
+failures look identical and need opposite fixes, so they are worth separating
+before anyone argues about what to fix.
+
+The third row exists because an object the indexer found but the vocabulary
+cannot name is invisible in practice. Counting it as recalled would report a
+system that works better than the one a person can actually use.
 
 ---
 
@@ -428,10 +523,24 @@ the wrong bottle is worse than one that asks.
   crop-and-recheck pass is the obvious next step.
 - **`query_parser.py` is a dictionary, not a parser.** It ignores grammar
   entirely and only looks for known nouns, which is why phrasing is irrelevant
-  ("where my laptop", "yo where'd my macbook go" both work) — and why an unknown
-  word is fatal ("labtop", Korean input). It fails *visibly* rather than
-  hallucinating. Upgrading it to an LLM call is a drop-in swap: it only has to
-  return the same `ParsedQuery`.
+  ("where my laptop", "yo where'd my macbook go", "내 맥북 어딨어" all work) — and
+  why a word that is not in the dictionary is fatal. It fails *visibly* rather
+  than hallucinating. Upgrading it to an LLM call is a drop-in swap: it only has
+  to return the same `ParsedQuery`.
+- **A missing translation is a wrong answer, not a missing feature.** Korean and
+  Chinese are written without reliable word boundaries, so matching scans for the
+  longest word it knows. With `fan` added in English only, "선풍기" matched "선" —
+  a cord — and a search for a fan confidently returned cables. Every type needs
+  all three languages at once; a test enforces it.
+- **Relations disagree between views.** The same object can be "beside the
+  charger" from one angle and "beside the phone" from another, so a perfectly
+  truthful answer to "what was it next to?" can filter out the object the person
+  is holding in their memory. This is the largest remaining source of failures in
+  `run_eval.py`.
+- **The indexer still invents objects.** 37 of 152 index entries match nothing in
+  the ground truth, and one real object (a small black case) is missed entirely.
+  A folded umbrella read as a backpack from one angle; grouping the two look-alike
+  types lets the views merge, but the underlying confusion is the model's.
 - **Relations are 2D only.** "Behind" is not recoverable from a single photo.
 - **Merging can under-count.** An object visible in only one non-reference view
   is absorbed into the nearest reference object. We accept this: over-counting
