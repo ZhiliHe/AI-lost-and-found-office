@@ -47,6 +47,15 @@ TYPE_NAMES = {
     "power bank": {"ko": "보조배터리", "zh": "充电宝"},
     "tablet":     {"ko": "태블릿",   "zh": "平板"},
     "watch":      {"ko": "시계",     "zh": "手表"},
+    # Added to the vocabulary after the ground truth was checked against the
+    # photos. A type the search can find but i18n cannot name comes back as an
+    # English word inside a Korean sentence - "베이지색 fan이 711호에 있습니다" -
+    # which looks broken in a way that has nothing to do with what went wrong.
+    "fan":        {"ko": "선풍기",   "zh": "风扇"},
+    "tissue":     {"ko": "휴지",     "zh": "纸巾"},
+    "hair tie":   {"ko": "머리끈",   "zh": "发圈"},
+    "skateboard": {"ko": "스케이트보드", "zh": "滑板"},
+    "case":       {"ko": "케이스",   "zh": "盒子"},
 }
 
 # --- colours ----------------------------------------------------------------

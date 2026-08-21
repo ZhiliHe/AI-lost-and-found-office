@@ -34,6 +34,36 @@ def test_longest_match_wins_at_each_position():
     assert find_object_types("我的笔记本电脑在哪") == ["laptop"]
 
 
+def test_a_new_type_needs_all_three_languages_at_once():
+    """An English-only vocabulary entry is not a missing feature, it is a wrong
+    answer. With no Korean word for a fan, "선풍기" was matched by the longest
+    CJK substring we did know - "선", a cord - so asking for a fan searched for
+    cables and confidently answered about the wrong thing."""
+    assert find_object_types("선풍기") == ["fan"]
+    assert find_object_types("내 손선풍기 어딨어") == ["fan"]
+    assert find_object_types("我的小风扇在哪") == ["fan"]
+    assert find_object_types("곱창밴드") == ["hair tie"]
+    assert find_object_types("scrunchie") == ["hair tie"]
+    # and the word it used to be confused with still works
+    assert find_object_types("충전선 어딨어") == ["cable"]
+
+
+def test_every_type_the_index_can_return_has_a_name_in_each_language():
+    """A type the search can find but i18n cannot name comes back as an English
+    word inside a Korean sentence - "베이지색 fan이 711호에 있습니다" - which
+    reads as broken for reasons unrelated to what actually went wrong."""
+    import json
+    from pathlib import Path
+    index_path = Path(__file__).resolve().parent.parent / "data" / "scene_index.json"
+    if not index_path.exists():
+        return
+    with open(index_path, "r", encoding="utf-8") as handle:
+        scenes = json.load(handle).get("scenes", [])
+    types = {obj["type"] for scene in scenes for obj in scene.get("objects", [])}
+    unnamed = sorted(t for t in types if t not in i18n.TYPE_NAMES)
+    assert not unnamed, f"no Korean/Chinese name for: {unnamed}"
+
+
 def test_colours_in_three_languages():
     assert find_colors("the black one") == ["black"]
     assert find_colors("검은색이야") == ["black"]

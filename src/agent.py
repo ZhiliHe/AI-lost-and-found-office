@@ -782,7 +782,13 @@ class Session:
             uncertainty = "" if band == "high" else " The match is medium-confidence, so please check the image."
             return Reply(
                 "answer",
-                f"{prefix} - the {describe_object(cand['object'])} is "
+                # Pass the candidate and what was asked for. describe_object
+                # uses the owner's own word when any view agrees with it, and
+                # the final answer is the one sentence where that matters most:
+                # "your blue laptop is in 703" is right, while "the gray laptop
+                # is in 703" reads as the wrong object and ends the search.
+                f"{prefix} - the "
+                f"{describe_object(cand['object'], cand, self._wanted())} is "
                 f"{describe_place(cand['scene'], cand['object'], self.parsed.anchor_type)}."
                 f"{uncertainty}",
                 candidates=self.candidates,

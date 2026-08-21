@@ -141,7 +141,12 @@ def run_case(index, cfg, case):
     elif missing:
         ok = False               # cannot be found; counted as recall, not reasoning
     else:
-        ok = found in acceptable
+        # By id when we can, and otherwise by whether the object it returned
+        # IS the one described - see truth.matches_candidate for why the two
+        # can differ.
+        ok = found in acceptable or (
+            reply.kind == "answer" and reply.candidates
+            and truth.matches_candidate(descriptor, reply.candidates[0]))
 
     # A "false answer" is answering with no questions when the query was
     # genuinely ambiguous. This is the metric that separates us from top-1 retrieval.

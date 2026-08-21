@@ -273,7 +273,6 @@
           "type": "handheld fan",
           "color": "beige",
           "scope": "in",
-          "vocab_gap": true,
           "where": "on the coffee table",
           "views": [
             "front",
@@ -422,7 +421,6 @@
           "type": "hair tie",
           "color": "purple",
           "scope": "in",
-          "vocab_gap": true,
           "where": "lavender scrunchie",
           "views": [
             "front",

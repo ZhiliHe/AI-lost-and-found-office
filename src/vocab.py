@@ -58,6 +58,11 @@ OBJECT_SYNONYMS = {
     "fan":        ["fan", "hand fan", "handheld fan", "handled fan",
                    "mini fan", "portable fan", "usb fan", "electric fan",
                    "手持风扇", "小风扇", "手持小风扇"],
+    # The lavender scrunchie on the 8f table. It is in the index and in the
+    # ground truth; without a word for it, it was the one object a person
+    # could see in the photo and still not search for.
+    "hair tie":   ["hair tie", "hairtie", "scrunchie", "hair band", "hairband",
+                   "hair elastic", "bobble", "ponytail holder"],
 }
 
 # --- Korean and Chinese, for spoken queries ---------------------------------
@@ -94,6 +99,20 @@ OBJECT_SYNONYMS_CJK = {
     "book":       ["책", "书", "书本"],
     "power bank": ["보조배터리", "充电宝", "移动电源"],
     "card":       ["카드", "명함", "卡", "名片"],
+    # Types added to OBJECT_SYNONYMS after the ground truth was checked. An
+    # English-only entry is not neutral here: with no Korean word for a fan,
+    # "선풍기" was matched by the longest CJK substring we DO know, which is
+    # "선" - a cord - so asking for a fan searched for cables and answered
+    # about the wrong thing entirely. A missing translation is a wrong answer,
+    # not a missing feature.
+    "fan":        ["선풍기", "손선풍기", "미니선풍기", "휴대용선풍기", "부채",
+                   "风扇", "手持风扇", "小风扇", "电风扇", "扇子"],
+    "tissue":     ["휴지", "티슈", "냅킨", "물티슈",
+                   "纸巾", "抽纸", "面巾纸", "湿巾"],
+    "hair tie":   ["머리끈", "곱창밴드", "헤어끈", "머리띠",
+                   "发圈", "发绳", "皮筋"],
+    "case":       ["케이스", "파우치", "盒子", "收纳盒"],
+    "skateboard": ["스케이트보드", "보드", "滑板"],
 }
 
 COLOR_ALIASES_CJK = {

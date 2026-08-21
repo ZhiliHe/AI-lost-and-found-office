@@ -175,19 +175,18 @@
   },
 
   {
-    "id": "vocab-gap-01",
+    "id": "vocab-fixed-01",
     "query": "Where is my handheld fan?",
-    "expect": {"location": "711", "type": "handheld fan", "color": "beige"},
-    "difficulty": "vocab-gap",
-    "known_gap": true,
-    "note": "in the photo and in the index, but OBJECT_SYNONYMS has no word for it"
+    "expect": {"location": "711", "type": "handheld fan"},
+    "difficulty": "vocab-fixed",
+    "note": "was a vocab gap - in the photo and in the index, but no word to search it by. Kept as a case so the fix stays fixed. No colour: the ground truth says beige and the model says white, which run_recall.py counts as an attribute error rather than a miss"
   },
   {
-    "id": "vocab-gap-02",
+    "id": "vocab-fixed-02",
     "query": "Where is my scrunchie?",
     "expect": {"location": "8f_lobbytable", "type": "hair tie", "color": "purple"},
-    "difficulty": "vocab-gap",
-    "known_gap": true
+    "difficulty": "vocab-fixed",
+    "note": "also a former gap - the one object a person could see in the photo and still not search for"
   },
 
   {
