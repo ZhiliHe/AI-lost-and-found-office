@@ -1,33 +1,687 @@
 {
   "_README": [
-    "Hand-written truth for the photos we actually took. Fill this in while you",
-    "are still standing in the room - nobody can reconstruct it from memory later.",
+    "Hand-written truth: what a person actually sees in each place.",
+    "Corrected against the photos by the team - do not regenerate from the model.",
     "",
     "This is NOT produced by the model. It is what we measure the model against:",
-    "  - object recall  = how many of these the indexer actually found",
-    "  - attribute accuracy = did it get the colour right",
-    "The project brief asks for 'a small evaluation with several test cases', and",
-    "this file plus eval/test_queries.json is that deliverable.",
+    "  object recall      = how many of these the indexer found",
+    "  false positives    = things it reported that are not here",
+    "  attribute accuracy = did it get the colour right",
     "",
-    "Delete the two example entries below once real photos exist."
+    "Listed PER LOCATION, not per photo, because that is what a query resolves",
+    "against after multi-view merging. `views` records which photos show it -",
+    "an object visible in only one view is exactly what merging has to rescue.",
+    "",
+    "`scope` is the honest bookkeeping:",
+    "  in   - we intend to index and find this. Counts towards recall.",
+    "  out  - deliberately excluded (a fixture, or supplied by the building).",
+    "         Reported separately so recall is not quietly inflated.",
+    "",
+    "`vocab_gap: true` means the object IS indexed but cannot be searched for by",
+    "name, because OBJECT_SYNONYMS has no entry. Those are real misses from a",
+    "user's point of view and belong in the failure-case section of the report."
   ],
-
-  "scenes": {
-    "office_office_01": {
+  "locations": {
+    "6f_meetingroom": {
       "objects": [
-        {"type": "bottle", "color": "black", "brand_or_logo": "white logo",
-         "where": "right of the laptop"},
-        {"type": "bottle", "color": "blue", "brand_or_logo": null,
-         "where": "left of the laptop"},
-        {"type": "laptop", "color": "silver", "brand_or_logo": null,
-         "where": "centre of the desk"}
+        {
+          "type": "bottle",
+          "color": "green",
+          "material": "metal",
+          "scope": "in",
+          "where": "middle of the table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "transparent",
+          "material": "plastic",
+          "scope": "in",
+          "where": "far side, blue cap",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "umbrella",
+          "color": "purple",
+          "scope": "in",
+          "where": "folded, left of the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "umbrella",
+          "color": "pink",
+          "scope": "in",
+          "where": "ISACA Singapore umbrella, far side of the table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "laptop",
+          "color": "white",
+          "scope": "in",
+          "where": "closed, centre of the table (Lenovo)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mouse",
+          "color": "black",
+          "scope": "in",
+          "where": "near edge, below the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mouse",
+          "color": "white",
+          "scope": "in",
+          "where": "right of the laptop, covered in stickers",
+          "views": [
+            "front",
+            "side"
+          ]
+        }
       ]
     },
-    "classroom_classroom_01": {
+    "703": {
       "objects": [
-        {"type": "backpack", "color": "blue", "brand_or_logo": null,
-         "where": "on the middle desk"}
+        {
+          "type": "bottle",
+          "color": "blue",
+          "material": "metal",
+          "scope": "in",
+          "where": "left end of the desk (lululemon)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "transparent",
+          "material": "plastic",
+          "scope": "in",
+          "where": "far side, red cap",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mug",
+          "color": "transparent",
+          "material": "plastic",
+          "scope": "in",
+          "where": "right end, iced coffee cup with a straw",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "laptop",
+          "color": "gray",
+          "scope": "in",
+          "where": "closed, left (ASUS Zenbook)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "laptop",
+          "color": "blue",
+          "scope": "in",
+          "where": "closed, on a black sleeve (MacBook)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "phone",
+          "color": "beige",
+          "scope": "in",
+          "where": "left of centre, large round camera",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "phone",
+          "color": "gray",
+          "scope": "in",
+          "where": "middle, grey phone in a clear case",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "umbrella",
+          "color": "pink",
+          "scope": "in",
+          "where": "folded, left of centre",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "umbrella",
+          "color": "blue",
+          "scope": "in",
+          "where": "folded, right side",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mouse",
+          "color": "black",
+          "scope": "in",
+          "where": "middle of the desk",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mouse",
+          "color": "white",
+          "scope": "in",
+          "where": "left of the black mouse, covered in stickers",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "headphones",
+          "color": "white",
+          "scope": "in",
+          "where": "AirPods case, near the blue bottle",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "headphones",
+          "color": "green",
+          "scope": "in",
+          "where": "mint earbuds case on a keyring",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "case",
+          "color": "black",
+          "scope": "in",
+          "vocab_gap": true,
+          "where": "small black container on the same keyring as the mint case",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "cable",
+          "color": "white",
+          "scope": "in",
+          "where": "USB stick, front edge of the desk",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "backpack",
+          "color": "black",
+          "material": "fabric",
+          "scope": "in",
+          "where": "on the cabinet behind the desk",
+          "views": [
+            "front",
+            "side"
+          ]
+        }
       ]
+    },
+    "711": {
+      "objects": [
+        {
+          "type": "handheld fan",
+          "color": "beige",
+          "scope": "in",
+          "vocab_gap": true,
+          "where": "on the coffee table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "black",
+          "scope": "in",
+          "where": "on the coffee table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "cable",
+          "color": "black",
+          "scope": "in",
+          "where": "coiled on the coffee table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "keys",
+          "color": "black",
+          "scope": "in",
+          "where": "small keyfob, right side of the coffee table",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "umbrella",
+          "color": "green",
+          "scope": "in",
+          "where": "mint green, folded, on the sofa",
+          "views": [
+            "front",
+            "side"
+          ]
+        }
+      ],
+      "_note": "The white object on the table is a cable tidy, not a charger - deliberately not counted."
+    },
+    "7f_tearoom": {
+      "objects": [
+        {
+          "type": "bottle",
+          "color": "green",
+          "material": "plastic",
+          "scope": "in",
+          "where": "green drink bottle on the counter",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "red",
+          "material": "plastic",
+          "scope": "in",
+          "where": "water bottle with a red cap, on the counter",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "phone",
+          "color": "white",
+          "scope": "in",
+          "where": "face up on the counter between the bottles",
+          "views": [
+            "front",
+            "side"
+          ]
+        }
+      ],
+      "_excluded_fixtures": [
+        "water cooler",
+        "ice maker",
+        "sink",
+        "faucet"
+      ],
+      "_note": "The sparsest room. Useful precisely because most queries here should return NOT FOUND."
+    },
+    "8f_lobbytable": {
+      "objects": [
+        {
+          "type": "laptop",
+          "color": "silver",
+          "scope": "in",
+          "where": "closed, on the yellow table (Lenovo)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "glasses",
+          "color": "black",
+          "scope": "in",
+          "where": "round metal frames, resting on the laptop lid",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "glasses",
+          "color": "transparent",
+          "scope": "in",
+          "where": "clear frames, right of the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "watch",
+          "color": "yellow",
+          "scope": "in",
+          "where": "round face, pale yellow strap",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "watch",
+          "color": "black",
+          "scope": "in",
+          "where": "Apple Watch with a black strap",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "hair tie",
+          "color": "purple",
+          "scope": "in",
+          "vocab_gap": true,
+          "where": "lavender scrunchie",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "green",
+          "material": "metal",
+          "scope": "in",
+          "where": "on a chair at the edge of frame",
+          "views": [
+            "front"
+          ],
+          "uncertain": true
+        }
+      ]
+    },
+    "8f_lobbytable_b": {
+      "_note": "The SAME physical objects as 6f_meetingroom, carried to the 8f lobby table. This is the deliberate cross-location duplicate case: green bottle, purple umbrella, pink ISACA umbrella, black mouse and the grey laptop all appear in both places. The white phone is NOT shared - it belongs only here.",
+      "objects": [
+        {
+          "type": "bottle",
+          "color": "green",
+          "material": "metal",
+          "scope": "in",
+          "where": "far side of the yellow table",
+          "views": [
+            "front",
+            "side"
+          ],
+          "also_in": "6f_meetingroom"
+        },
+        {
+          "type": "umbrella",
+          "color": "purple",
+          "scope": "in",
+          "where": "folded, right of centre",
+          "views": [
+            "front",
+            "side"
+          ],
+          "also_in": "6f_meetingroom"
+        },
+        {
+          "type": "umbrella",
+          "color": "pink",
+          "scope": "in",
+          "where": "ISACA Singapore umbrella",
+          "views": [
+            "front",
+            "side"
+          ],
+          "also_in": "6f_meetingroom"
+        },
+        {
+          "type": "mouse",
+          "color": "black",
+          "scope": "in",
+          "where": "near edge of the table",
+          "views": [
+            "front",
+            "side"
+          ],
+          "also_in": "6f_meetingroom"
+        },
+        {
+          "type": "laptop",
+          "color": "gray",
+          "scope": "in",
+          "where": "on a chair at the edge of frame",
+          "views": [
+            "front",
+            "side"
+          ],
+          "also_in": "6f_meetingroom"
+        },
+        {
+          "type": "phone",
+          "color": "white",
+          "scope": "in",
+          "where": "feather pattern on the back - only in this room",
+          "views": [
+            "front",
+            "side"
+          ]
+        }
+      ]
+    },
+    "hotelroom": {
+      "objects": [
+        {
+          "type": "laptop",
+          "color": "silver",
+          "scope": "in",
+          "where": "closed, centre of the desk (Lenovo)",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "green",
+          "material": "plastic",
+          "scope": "in",
+          "where": "tall Tupperware bottle, right side",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "bottle",
+          "color": "transparent",
+          "material": "plastic",
+          "scope": "in",
+          "where": "water bottle with a blue cap, behind the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "mouse",
+          "color": "black",
+          "scope": "in",
+          "where": "right of the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "watch",
+          "color": "black",
+          "scope": "in",
+          "where": "smartwatch lying behind the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "white",
+          "scope": "in",
+          "where": "plugged into the power strip",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "white",
+          "scope": "in",
+          "where": "plugged into the power strip",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "white",
+          "scope": "in",
+          "where": "plugged into the power strip",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "white",
+          "scope": "in",
+          "where": "plugged into the power strip",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "black",
+          "scope": "in",
+          "where": "in the middle of the power strip",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "charger",
+          "color": "white",
+          "scope": "in",
+          "where": "round watch charger puck on its cable",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "cable",
+          "color": "white",
+          "scope": "in",
+          "where": "several white cables across the desk",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "cable",
+          "color": "black",
+          "scope": "in",
+          "where": "black cable running to the laptop",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "backpack",
+          "color": "white",
+          "material": "fabric",
+          "scope": "in",
+          "where": "cream tote bag at the back left",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "backpack",
+          "color": "orange",
+          "material": "paper",
+          "scope": "in",
+          "where": "orange paper bag on the right",
+          "views": [
+            "front",
+            "side"
+          ]
+        },
+        {
+          "type": "tissue box",
+          "color": "green",
+          "scope": "out",
+          "where": "left of the laptop",
+          "views": [
+            "front",
+            "side"
+          ],
+          "note": "in NOT_PORTABLE - present in the room, deliberately not indexed"
+        }
+      ],
+      "_note": "The power strip is the hardest part of the dataset: five near-identical white chargers packed together, plus the keyboard-key texture that once became 22 phantom chargers."
     }
   }
 }
