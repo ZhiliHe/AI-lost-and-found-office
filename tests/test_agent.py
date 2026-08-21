@@ -90,11 +90,19 @@ def test_full_clarification_converges(index, config):
 
 
 def test_agent_gives_up_rather_than_looping_forever(index, config):
+    """Out of questions, it stops asking - but the photos are the last channel
+    left, so it offers them once before giving up. Saying "none of these" ends
+    the search; it must not put the same pictures back up."""
     session = Session(index, {"agent": {"max_clarify_turns": 1, "top_k_scenes": 5}})
     assert session.start("where is my bottle").kind == "question"
+
     reply = session.reply("i don't know")
-    assert reply.kind == "giveup"
+    assert reply.kind == "choose"
     assert reply.candidates            # still shows a shortlist
+
+    ended = session.reply("none of these")
+    assert ended.kind == "none_found"
+    assert session.pending_key is None
 
 
 def test_dont_know_does_not_add_a_constraint(index, config):
@@ -971,6 +979,24 @@ def test_a_colour_reply_is_not_mistaken_for_a_new_question(index, config):
     assert session.parsed.target_type == "bottle"
     assert session.constraints.get("color") == "black" or \
         session.parsed.attributes.get("color") == "black"
+
+
+def test_naming_an_unoffered_neighbour_answers_the_question(near_index, config):
+    """Asked "was it next to the umbrella or the charger?", people answer with
+    whatever was actually next to it - "my phone" - and the options we listed
+    are only the neighbours WE know about.
+
+    Reading that as a new search for a phone is the worst outcome available:
+    the bottle they came for is abandoned and they are shown a phone instead,
+    with nothing on screen to explain why. It looked like a wrong answer in the
+    evaluation set for exactly as long as it took to trace.
+    """
+    session = Session(near_index, config)
+    session.start("where is my bottle")
+    session.pending_key, session.pending_options = "near", ["umbrella", "charger"]
+    session._apply_answer("phone")
+    assert session.parsed.target_type == "bottle"
+    assert session.constraints.get("near") == "phone"
 
 
 def test_a_volunteered_room_is_kept_even_when_we_asked_something_else(index, config):

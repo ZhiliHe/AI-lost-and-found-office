@@ -1,77 +1,206 @@
 [
   {
+    "_README": [
+      "Expected answers are DESCRIBED, not named by object id. Ids are assigned",
+      "by the indexer and change every time the photos are re-indexed; the first",
+      "version of this file named them directly and reported 10% accuracy the",
+      "day the index was rebuilt, while nothing was actually broken.",
+      "",
+      "Every descriptor here is copied from data/ground_truth.json, so a case",
+      "asks for something a person can see in the photo. If the index has no",
+      "object matching it, that is reported as MISSING - the indexer never found",
+      "it - and counted as recall, not as a reasoning mistake.",
+      "",
+      "difficulty drives what is measured:",
+      "  easy         one obvious match; answering with no questions is correct",
+      "  ambiguous    several matches; answering with NO questions is a failure",
+      "  duplicate    same thing in two rooms; location has to be asked",
+      "  spatial      only a relation separates the candidates",
+      "  small-object easy to miss at full-frame resolution",
+      "  multilingual asked in Korean or Chinese",
+      "  vocab-gap    known to fail: indexed, but no synonym to search it by",
+      "  not-found    not in the building; saying so is the correct answer"
+    ]
+  },
+
+  {
     "id": "easy-01",
-    "query": "Find the blue bottle",
-    "answers": [],
-    "expect": "office_01_o2",
+    "query": "Where is the orange bag?",
+    "expect": {"location": "hotelroom", "type": "backpack", "color": "orange"},
     "difficulty": "easy",
-    "note": "unique attribute, should answer with zero questions"
+    "note": "only orange bag anywhere - should answer with zero questions"
   },
   {
     "id": "easy-02",
-    "query": "Where is the red umbrella?",
-    "answers": [],
-    "expect": "lounge_01_o1",
+    "query": "Find the yellow watch",
+    "expect": {"location": "8f_lobbytable", "type": "watch", "color": "yellow"},
     "difficulty": "easy"
   },
   {
-    "id": "spatial-01",
-    "query": "Find the black bottle beside the laptop",
-    "answers": [],
-    "expect": "office_01_o1",
-    "difficulty": "spatial",
-    "note": "relation alone must disambiguate two black bottles"
+    "id": "easy-03",
+    "query": "Where is the beige phone?",
+    "expect": {"location": "703", "type": "phone", "color": "beige"},
+    "difficulty": "easy"
   },
   {
-    "id": "spatial-02",
-    "query": "Is there a bottle next to a backpack?",
-    "answers": [],
-    "expect": "meeting_02_o1",
-    "difficulty": "spatial"
+    "id": "easy-04",
+    "query": "I lost my keys",
+    "expect": {"location": "711", "type": "keys", "color": "black"},
+    "difficulty": "easy",
+    "note": "one keyfob in the ground truth - a second would make this ambiguous"
   },
+
   {
     "id": "ambiguous-01",
     "query": "Where is my bottle?",
-    "answers": [],
-    "expect": "office_01_o1",
+    "expect": {"location": "703", "type": "bottle", "color": "blue"},
     "difficulty": "ambiguous",
-    "note": "must ASK before answering - answering immediately is a failure"
+    "note": "bottles in five rooms; answering immediately is the failure this project exists to fix"
   },
   {
     "id": "ambiguous-02",
-    "query": "I lost my backpack",
-    "answers": [],
-    "expect": "lounge_01_o0",
+    "query": "I lost my laptop",
+    "expect": {"location": "703", "type": "laptop", "color": "blue"},
     "difficulty": "ambiguous"
   },
   {
     "id": "ambiguous-03",
-    "query": "Where is my notebook?",
-    "answers": [],
-    "expect": "meeting_02_o2",
+    "query": "Where is my umbrella?",
+    "expect": {"location": "703", "type": "umbrella", "color": "pink"},
     "difficulty": "ambiguous",
-    "note": "'notebook' means laptop OR paper notebook - agent should ask"
+    "note": "pink umbrellas exist in two rooms as well - colour alone is not enough"
   },
   {
-    "id": "absent-01",
-    "query": "Where is my skateboard?",
-    "answers": [],
+    "id": "ambiguous-04",
+    "query": "Where is my mouse?",
+    "expect": {"location": "703", "type": "mouse", "color": "white"},
+    "difficulty": "ambiguous"
+  },
+  {
+    "id": "ambiguous-05",
+    "query": "Where is my charger?",
+    "expect": {"location": "711", "type": "charger", "color": "black"},
+    "difficulty": "ambiguous",
+    "note": "chargers are the least distinguishable thing we index - a hard case on purpose"
+  },
+  {
+    "id": "ambiguous-06",
+    "query": "Where is my phone?",
+    "expect": {"location": "7f_tearoom", "type": "phone", "color": "white"},
+    "difficulty": "ambiguous"
+  },
+
+  {
+    "id": "duplicate-01",
+    "query": "Where is the green bottle?",
+    "expect": {"location": "7f_tearoom", "type": "bottle", "color": "green"},
+    "difficulty": "duplicate",
+    "note": "green bottles in three places - the location question is the only way through"
+  },
+  {
+    "id": "duplicate-02",
+    "query": "Find the purple umbrella",
+    "expect": {"location": "8f_lobbytable_b", "type": "umbrella", "color": "purple"},
+    "difficulty": "duplicate",
+    "note": "genuinely the same umbrella carried to another room; both answers are places it was seen"
+  },
+  {
+    "id": "duplicate-03",
+    "query": "Where is the black mouse?",
+    "expect": {"location": "6f_meetingroom", "type": "mouse", "color": "black"},
+    "difficulty": "duplicate"
+  },
+
+  {
+    "id": "spatial-01",
+    "query": "Where is the mouse below the laptop?",
+    "expect": {"location": "6f_meetingroom", "type": "mouse", "color": "black"},
+    "difficulty": "spatial",
+    "note": "two mice on that table; only the relation to the laptop separates them"
+  },
+  {
+    "id": "spatial-02",
+    "query": "Find the glasses on the laptop",
+    "expect": {"location": "8f_lobbytable", "type": "glasses", "color": "black"},
+    "difficulty": "spatial"
+  },
+  {
+    "id": "spatial-03",
+    "query": "Is there a bottle next to a phone?",
+    "expect": {"location": "7f_tearoom", "type": "bottle"},
+    "difficulty": "spatial",
+    "note": "the phone lies between the two bottles - either bottle is a correct answer"
+  },
+
+  {
+    "id": "small-01",
+    "query": "Where is my USB stick?",
+    "expect": {"location": "703", "type": "cable", "color": "white"},
+    "difficulty": "small-object",
+    "note": "a few pixels on the desk edge - this is what tiling was added for"
+  },
+  {
+    "id": "small-02",
+    "query": "Where are my earbuds?",
+    "expect": {"location": "703", "type": "headphones", "color": "green"},
+    "difficulty": "small-object",
+    "note": "mint case on a keyring, next to the white AirPods case"
+  },
+
+  {
+    "id": "multilingual-01",
+    "query": "내 주황색 가방 어딨어?",
+    "expect": {"location": "hotelroom", "type": "backpack", "color": "orange"},
+    "difficulty": "multilingual",
+    "note": "same as easy-01, asked in Korean"
+  },
+  {
+    "id": "multilingual-02",
+    "query": "我的蓝色笔记本电脑在哪",
+    "expect": {"location": "703", "type": "laptop", "color": "blue"},
+    "difficulty": "multilingual"
+  },
+  {
+    "id": "multilingual-03",
+    "query": "민트색 우산 어디 있어",
+    "expect": {"location": "711", "type": "umbrella", "color": "green"},
+    "difficulty": "multilingual",
+    "note": "Korean speakers say 민트 (mint) far more often than 초록 (green)"
+  },
+  {
+    "id": "multilingual-04",
+    "query": "我的耳机在哪里",
+    "expect": {"location": "703", "type": "headphones"},
+    "difficulty": "multilingual"
+  },
+
+  {
+    "id": "vocab-gap-01",
+    "query": "Where is my handheld fan?",
+    "expect": {"location": "711", "type": "handheld fan", "color": "beige"},
+    "difficulty": "vocab-gap",
+    "known_gap": true,
+    "note": "in the photo and in the index, but OBJECT_SYNONYMS has no word for it"
+  },
+  {
+    "id": "vocab-gap-02",
+    "query": "Where is my scrunchie?",
+    "expect": {"location": "8f_lobbytable", "type": "hair tie", "color": "purple"},
+    "difficulty": "vocab-gap",
+    "known_gap": true
+  },
+
+  {
+    "id": "not-found-01",
+    "query": "Where is my passport?",
     "expect": null,
-    "difficulty": "absent",
-    "note": "must say it cannot find it rather than returning the nearest object"
+    "difficulty": "not-found",
+    "note": "must say it has not seen one, and say which places it checked"
   },
   {
-    "id": "absent-02",
-    "query": "Find the green bottle",
-    "answers": [],
+    "id": "not-found-02",
+    "query": "I lost my bicycle",
     "expect": null,
-    "difficulty": "absent"
-  },
-  {
-    "id": "location-01",
-    "query": "Is my bottle in the classroom?",
-    "answers": [],
-    "expect": "classroom_01_o0",
-    "difficulty": "location"
+    "difficulty": "not-found"
   }
 ]

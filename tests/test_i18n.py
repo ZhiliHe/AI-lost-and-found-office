@@ -1,0 +1,269 @@
+"""The spoken demo answers in the language it was asked in."""
+
+import sys
+from pathlib import Path
+
+sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
+
+from src import i18n, voice                             # noqa: E402
+from src.jarvis import (order_candidates_left_to_right,  # noqa: E402
+                        resolve_position)
+from src.vocab import detect_language, find_colors, find_object_types  # noqa: E402
+
+
+# --- understanding what was said -------------------------------------------
+
+def test_object_names_in_three_languages():
+    for query in ("where is my bag", "내 가방 어딨어?", "我的包在哪里"):
+        assert find_object_types(query) == ["backpack"], query
+
+
+def test_cjk_needs_no_spaces():
+    """Chinese never spaces its words and Korean often does not. Matching on
+    word boundaries - correct for English, where " pen " must not hit "open" -
+    finds nothing at all in either."""
+    assert find_object_types("내가방어딨어") == ["backpack"]
+    assert find_object_types("我的包在哪里") == ["backpack"]
+    assert find_object_types("手机和耳机") == ["phone", "headphones"]
+
+
+def test_longest_match_wins_at_each_position():
+    """粉红色 must read as PINK. A plain longest-key-first loop found 红色
+    (red) sitting inside it and returned both."""
+    assert find_colors("粉红色的") == ["pink"]
+    assert find_object_types("我的笔记本电脑在哪") == ["laptop"]
+
+
+def test_colours_in_three_languages():
+    assert find_colors("the black one") == ["black"]
+    assert find_colors("검은색이야") == ["black"]
+    assert find_colors("黑色") == ["black"]
+
+
+def test_language_detection():
+    assert detect_language("where is my bag") == "en"
+    assert detect_language("내 가방 어딨어?") == "ko"
+    assert detect_language("我的包在哪里") == "zh"
+
+
+# --- answering --------------------------------------------------------------
+
+def test_korean_particles_follow_the_word():
+    """이/가 and 을/를 depend on whether the word ends in a consonant. Getting
+    it wrong is the clearest possible sign a sentence was assembled by a
+    machine - "마우스이" is not a thing anyone writes."""
+    assert i18n.josa("가방", "이", "가") == "이"
+    assert i18n.josa("마우스", "이", "가") == "가"
+    assert i18n.josa("우산", "을", "를") == "을"
+    assert i18n.josa("커피", "을", "를") == "를"
+
+
+def test_answers_are_rendered_per_language():
+    obj = {"type": "backpack", "attributes": {"color": "black"}}
+    assert i18n.describe_object(obj, "en") == "black backpack"
+    assert i18n.describe_object(obj, "ko") == "검은색 가방"
+    assert i18n.describe_object(obj, "zh") == "黑色背包"
+
+
+def test_a_missing_phrase_falls_back_to_english():
+    """A wrong-language answer is recoverable in front of an audience. A raw
+    {placeholder} on the projector is not."""
+    text = i18n.phrase("found", "de", what="black bag", where="in the 703")
+    assert "{" not in text
+    assert "black bag" in text
+
+
+def test_options_are_joined_in_the_asking_language():
+    assert i18n.join_options("color", ["black", "blue"], "en") == "black or blue"
+    assert i18n.join_options("color", ["black", "blue"], "ko") == "검은색 아니면 파란색"
+    assert i18n.join_options("color", ["black", "blue"], "zh") == "黑色 还是 蓝色"
+
+
+# --- understanding the ANSWER to a question --------------------------------
+
+def test_localised_answers_map_back_to_english_options():
+    """The question went out in Korean, so the answer comes back in Korean -
+    but the agent only knows canonical English values. Without this the reply
+    is silently discarded and the agent asks the same thing again, which looks
+    exactly like a bug to an audience."""
+    cases = [
+        ("금속이야", "material", ["metal", "plastic"], "ko", "metal"),
+        ("작은거", "size", ["small", "large"], "ko", "small"),
+        ("703호", "location", ["703", "7f_tearoom"], "ko", "703"),
+        ("노트북 옆에", "near", ["laptop", "umbrella"], "ko", "laptop"),
+        ("金属", "material", ["metal", "plastic"], "zh", "metal"),
+        ("雨伞旁边", "near", ["laptop", "umbrella"], "zh", "umbrella"),
+    ]
+    for text, key, options, lang, expected in cases:
+        assert i18n.normalize_answer(text, key, options, lang) == expected, text
+
+
+def test_an_answer_naming_nothing_is_left_alone():
+    """"I don't know" must reach the agent as-is, so it can burn the turn
+    honestly instead of being mapped to a random option."""
+    assert i18n.normalize_answer("몰라", "material", ["metal", "plastic"], "ko") is None
+    assert i18n.normalize_answer("不知道", "size", ["small", "large"], "zh") is None
+
+
+# --- what actually gets said ------------------------------------------------
+
+def test_the_comparison_table_is_shown_but_not_read_aloud():
+    """The table is there so the audience can SEE the difference between
+    candidates. Read out loud it is fifteen seconds of attributes that buries
+    the question it was supposed to support."""
+    reply = ("What colour is yours? (white or blue)\n"
+             "Candidate A: white, metal, large, laptop, 703\n"
+             "Candidate B: blue, metal, large, laptop, 703")
+    assert voice.spoken_form(reply) == "What colour is yours? (white or blue)"
+
+
+def test_one_very_long_sentence_is_cut_at_a_sentence_end():
+    text = ("I found it. " * 40).strip()
+    said = voice.spoken_form(text)
+    assert len(said) <= voice.SPOKEN_LIMIT
+    assert said.endswith(".")
+
+
+# --- knowing when a sentence has ended --------------------------------------
+
+def _chunks(collector, sample_rate, loud, count, amplitude=0.2):
+    """Feed `count` chunks of speech or silence. Returns the phrase, if any."""
+    import numpy as np
+    rng = np.random.default_rng(0)
+    size = int(sample_rate * 0.4)
+    result = None
+    for _ in range(count):
+        data = (rng.normal(0, amplitude, size).astype("float32") if loud
+                else np.zeros(size, dtype="float32"))
+        result = collector.add(sample_rate, data) or result
+    return result
+
+
+def test_quiet_before_anything_is_said_is_not_a_phrase():
+    """The microphone is on for the whole demo. An empty room must never turn
+    into a search."""
+    collector = voice.PhraseCollector()
+    assert _chunks(collector, 48000, loud=False, count=10) is None
+
+
+def test_speech_then_a_pause_ends_the_sentence():
+    """This is the whole hands-free mechanism: you stop talking, it answers.
+    No button in between."""
+    collector = voice.PhraseCollector()
+    assert _chunks(collector, 48000, loud=True, count=3) is None
+    phrase = _chunks(collector, 48000, loud=False, count=4)
+    assert phrase is not None
+    sample_rate, samples = phrase
+    assert sample_rate == 48000
+    assert len(samples) > 48000        # over a second of audio
+
+
+def test_a_cough_is_not_a_question():
+    collector = voice.PhraseCollector()
+    import numpy as np
+    collector.add(48000, np.random.default_rng(1).normal(0, 0.3, 4800).astype("float32"))
+    assert _chunks(collector, 48000, loud=False, count=4) is None
+
+
+def test_int16_from_the_browser_is_understood():
+    """Some browsers hand over int16 and some float32. Judging int16 samples
+    against a 0-1 threshold makes silence look like shouting."""
+    import numpy as np
+    quiet16 = np.zeros(16000, dtype="int16")
+    assert float(np.abs(voice.to_mono_float(quiet16)).mean()) == 0.0
+    loud16 = (np.ones(16000) * 8000).astype("int16")
+    assert 0.2 < float(np.abs(voice.to_mono_float(loud16)).mean()) < 0.3
+
+
+def test_stereo_is_mixed_down():
+    import numpy as np
+    stereo = np.zeros((1000, 2), dtype="float32")
+    assert voice.to_mono_float(stereo).shape == (1000,)
+
+
+# --- "hey lopa" -------------------------------------------------------------
+
+def test_the_name_is_heard_however_whisper_spells_it():
+    """Whisper has never met this word and writes it differently every time.
+    Korean has no separate l and r, so 로파 comes back as lopa or ropa about
+    equally often, and English speakers' "hey lopa" lands somewhere nearby."""
+    for said in ("헤이 로파", "헤이로파", "Hey Lopa!", "hey, ropa",
+                 "헤이 로빠", "嘿罗帕", "헤이 로퍼"):
+        heard, _ = voice.hears_wake_word(said)
+        assert heard, said
+
+
+def test_the_question_after_the_name_is_kept():
+    """Waking up and then asking the person to repeat themselves is what makes
+    voice assistants tiring. One breath has to be enough."""
+    heard, rest = voice.hears_wake_word("헤이 로파, 내 가방 어딨어?")
+    assert heard and rest == "내 가방 어딨어?"
+    heard, rest = voice.hears_wake_word("Hey Lopa - where is my bottle?")
+    assert heard and rest == "where is my bottle?"
+
+
+def test_ordinary_conversation_does_not_wake_it():
+    for said in ("오늘 날씨 좋네", "where did I leave my keys", "我们去吃饭吧"):
+        heard, _ = voice.hears_wake_word(said)
+        assert not heard, said
+
+
+def test_it_stays_awake_for_the_rest_of_the_exchange():
+    """Having to say the name again to answer "blue" would be absurd."""
+    gate = voice.WakeGate()
+    assert gate.check("오늘 점심 뭐 먹지")[0] == voice.WakeGate.IGNORE
+    assert gate.check("헤이 로파")[0] == voice.WakeGate.WOKE
+    action, said = gate.check("내 노트북 어딨어?")
+    assert action == voice.WakeGate.SPEAK and said == "내 노트북 어딨어?"
+    assert gate.check("파란색")[0] == voice.WakeGate.SPEAK
+
+
+def test_it_goes_back_to_sleep():
+    gate = voice.WakeGate(timeout=0)
+    gate.check("헤이 로파")
+    assert gate.check("파란색")[0] == voice.WakeGate.IGNORE
+
+
+def test_the_gate_can_be_turned_off_entirely():
+    """Rehearsing, or a quiet room where the name is just friction."""
+    gate = voice.WakeGate(enabled=False)
+    assert gate.check("내 노트북 어딨어?")[0] == voice.WakeGate.SPEAK
+
+
+# --- pointing at the photos -------------------------------------------------
+
+def test_positional_picking_in_three_languages():
+    for text, expected in [("the left one", 0), ("왼쪽거", 0), ("左边的", 0),
+                           ("second", 1), ("가운데", 1), ("第二个", 1),
+                           ("the last one", 2), ("오른쪽", 2), ("最右", 2)]:
+        assert resolve_position(text, 3) == expected, text
+
+
+def test_a_colour_is_not_a_position():
+    assert resolve_position("black", 3) is None
+    assert resolve_position("검은색", 3) is None
+
+
+def test_left_means_left_on_the_desk_when_it_can():
+    """With every candidate in one photo, "the left one" should mean the object
+    further left on that desk - not just the first thumbnail we happened to
+    render."""
+    scene = {"scene_id": "703_front"}
+    candidates = [
+        {"scene": scene, "object": {"id": "right", "bbox": [3000, 100, 3200, 400]}},
+        {"scene": scene, "object": {"id": "left", "bbox": [200, 100, 400, 400]}},
+        {"scene": scene, "object": {"id": "middle", "bbox": [1500, 100, 1700, 400]}},
+    ]
+    order = [c["object"]["id"] for c in order_candidates_left_to_right(candidates)]
+    assert order == ["left", "middle", "right"]
+
+
+def test_across_rooms_left_means_the_first_photo():
+    """Two different rooms share no left-to-right, so the only honest reading
+    of "the left one" is the first thumbnail shown."""
+    candidates = [
+        {"scene": {"scene_id": "A"}, "object": {"id": "first", "bbox": [3000, 0, 3200, 400]}},
+        {"scene": {"scene_id": "B"}, "object": {"id": "second", "bbox": [200, 0, 400, 400]}},
+    ]
+    order = [c["object"]["id"] for c in order_candidates_left_to_right(candidates)]
+    assert order == ["first", "second"]

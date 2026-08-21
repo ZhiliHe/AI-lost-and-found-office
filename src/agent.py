@@ -371,6 +371,7 @@ class Session:
         self.pending_options = []
         self.picked = None
         self.rejected_shortlist = False
+        self.offered_pick = False      # show the photos once, not in a loop
         self.turns = 0
         self.candidates = []
         self.verified_ids = set()      # only pay for each VLM check once
@@ -449,6 +450,15 @@ class Session:
         if self.pending_key and not starts_like_a_question:
             if asked.target_type in self.pending_options:
                 return False
+            # We just asked which object it was next to. The options we listed
+            # are the neighbours WE know about, not the list of things that can
+            # be next to something - so "phone", when we offered "umbrella or
+            # charger", is an answer, not a new search. Reading it as a new
+            # search is the worst outcome available: the bottle the person is
+            # looking for is silently abandoned and they are shown a phone.
+            # _record_answer already accepts any known type here.
+            if self.pending_key == "near":
+                return False
             if asked.predicate is None:
                 _, relation_phrase = find_predicate(text)
                 if relation_phrase:
@@ -469,6 +479,7 @@ class Session:
         """
         shortlist = self.candidates[:MAX_TO_SHOW]
         self.turns += 1
+        self.offered_pick = True
         self.pending_key = PICK_KEY
         self.pending_options = [c["object"]["id"] for c in shortlist]
         return Reply(
@@ -479,6 +490,16 @@ class Session:
             candidates=shortlist,
             asked_key=PICK_KEY,
             options=self.pending_options)
+
+    def _give_up(self):
+        """Stop asking, show the best few, and say plainly that it is a guess."""
+        return Reply(
+            "giveup",
+            f"I still see {len(self.candidates)} possible matches"
+            f" Here are the most likely ones:\n"
+            f"{comparison_text(self.candidates, self.parsed)}",
+            candidates=self.candidates[:3],
+            confidence="medium")
 
     def _pick_from_shortlist(self, text, options):
         """"2", "the second one", "none". Returns True if the session resolved."""
@@ -768,17 +789,17 @@ class Session:
                 confidence=band)
 
         if self.turns >= self.max_turns:
-            return Reply(
-                "giveup",
-                f"I still see {len(self.candidates)} possible matches"
-                f" Here are the most likely ones:\n"
-                f"{comparison_text(self.candidates, self.parsed)}",
-                candidates=self.candidates[:3],
-                confidence="medium")
+            # Out of questions, but not out of options: the photos are already
+            # on screen, so let the user point at one instead of ending on
+            # "here are three, good luck". Offered once - if it is refused we
+            # fall through to the honest give-up below.
+            if not self.offered_pick:
+                return self._ask_to_pick()
+            return self._give_up()
 
         key, options = choose_question(self.candidates, self.asked)
         if key is None:
-            return self._ask_to_pick()
+            return self._ask_to_pick() if not self.offered_pick else self._give_up()
 
         self.turns += 1
         self.pending_key, self.pending_options = key, options
