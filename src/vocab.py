@@ -171,6 +171,16 @@ def is_portable(obj_type):
 FUZZY_TYPE_GROUPS = [
     {"bottle", "tumbler", "mug", "cup"},
     {"charger", "cable", "power bank"},
+    # A folded umbrella lying on a sofa is a soft coloured bundle, and so is a
+    # bag: the mint umbrella in 711 was read as an umbrella from one angle and
+    # a backpack from the other. Left ungrouped, the two views never merged and
+    # the index held a green backpack that does not exist - so "find my bag"
+    # answered confidently with a photo of an umbrella.
+    #
+    # Grouping them lets the views merge and one type win the vote. Both words
+    # still reach the object, and _candidate_confidence ranks the type actually
+    # asked for above the look-alike.
+    {"backpack", "umbrella"},
 ]
 
 # NOTE for the team: "notebook" is deliberately ambiguous (laptop vs paper

@@ -236,7 +236,18 @@ def _candidate_confidence(cand, parsed=None):
     multiview_boost = min(0.08, 0.03 * max(0, len(set(cand.get("seen_in", []))) - 1))
     relation_boost = 0.04 if parsed and parsed.predicate and parsed.anchor_type else 0.0
     attribute_boost = 0.03 * len(parsed.attributes) if parsed else 0.0
-    score = min(1.0, detection + multiview_boost + relation_boost + attribute_boost)
+    # A look-alike is a candidate, not an equal. FUZZY_TYPE_GROUPS lets a query
+    # for a bag also reach the folded umbrella one camera called a bag - which
+    # is what we want, because that IS how the mistake happens - but somebody
+    # asking for their bag should still be shown bags first. Without this the
+    # shortlist opens with four umbrellas and reads as a broken search rather
+    # than a careful one.
+    exact_type = 0.0
+    if parsed and parsed.target_type:
+        if cand["object"].get("type") == parsed.target_type:
+            exact_type = 0.05
+    score = min(1.0, detection + multiview_boost + relation_boost
+                + attribute_boost + exact_type)
     return round(score, 3)
 
 

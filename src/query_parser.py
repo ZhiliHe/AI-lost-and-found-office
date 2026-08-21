@@ -73,6 +73,66 @@ def _first_distinct(types):
     return types[0] if types else None
 
 
+def _split_on_relation(text, phrase):
+    """Cut the sentence at the relation word - at the WORD, not the letters.
+
+    find_predicate matches on word boundaries, so "in" is only a relation when
+    it stands alone. Locating it afterwards with a plain substring search threw
+    that away and found the "in" inside "f-in-d": "can you help me to find my
+    red bottle, it might be in the tearoom" was cut after "can you help me to
+    f", so "red" ended up on the anchor side and the colour the person had just
+    told us was dropped. We then asked them what colour it was.
+    """
+    if not phrase:
+        return text, ""
+    padded = f" {text} "
+    at = padded.find(f" {phrase} ")
+    if at < 0:
+        return text, ""
+    return padded[:at].strip(), padded[at + len(phrase) + 2:].strip()
+
+
+# "it should be laptop, not skateboard". People correct themselves constantly,
+# and a correction that is silently ignored is worse than a refusal: the
+# original wrong search runs again and looks like the system is not listening.
+NEGATIONS_BEFORE = ("not ", "no ", "isn't ", "is not ", "wasn't ", "was not ",
+                    "instead of ", "rather than ", "不是", "不")
+NEGATIONS_AFTER = ("말고", "아니라", "아니고", "이 아니", "가 아니")
+
+
+def _earliest_position(text, object_type):
+    """Where this type is first named, over every synonym in every language."""
+    from .vocab import OBJECT_SYNONYMS, OBJECT_SYNONYMS_CJK
+    words = list(OBJECT_SYNONYMS.get(object_type, []))
+    words += list(OBJECT_SYNONYMS_CJK.get(object_type, []))
+    words.append(object_type)
+    found = [text.find(word.lower()) for word in words]
+    hits = [at for at in found if at >= 0]
+    return min(hits) if hits else None
+
+
+def _drop_negated(text, types):
+    """Remove the types the person just told us it is NOT."""
+    if len(types) < 2:
+        return types
+    kept = []
+    for object_type in types:
+        at = _earliest_position(text, object_type)
+        if at is None:
+            kept.append(object_type)
+            continue
+        before = text[max(0, at - 14):at]
+        after = text[at:at + 18]
+        negated = (any(mark in before for mark in NEGATIONS_BEFORE)
+                   or any(mark in after for mark in NEGATIONS_AFTER))
+        if not negated:
+            kept.append((at, object_type))
+    ordered = [t for t in kept if isinstance(t, tuple)]
+    ordered.sort()
+    plain = [t for t in kept if not isinstance(t, tuple)]
+    return [t for _, t in ordered] + plain or types
+
+
 def _squash(text):
     """Lowercase and throw away everything that is not a letter or digit.
 
@@ -115,26 +175,23 @@ def parse(text, known_locations=()):
     normalised = _normalise_text(text)
     predicate, phrase = find_predicate(normalised)
 
-    if phrase:
-        cut = normalised.find(phrase)
-        left, right = normalised[:cut], normalised[cut + len(phrase):]
-    else:
-        left, right = normalised, ""
+    left, right = _split_on_relation(normalised, phrase)
 
     left_clean = _remove_filler(left)
     right_clean = _remove_filler(right)
-    left_types = find_object_types(left_clean)
-    right_types = find_object_types(right_clean)
+    left_types = _drop_negated(left_clean, find_object_types(left_clean))
+    right_types = _drop_negated(right_clean, find_object_types(right_clean))
 
     # Nothing on the left of the relation word ("beside the laptop, a bottle")
     # - fall back to scanning the whole string.
     if not left_types and right_types:
-        all_types = find_object_types(normalised)
+        all_types = _drop_negated(normalised, find_object_types(normalised))
         target = _first_distinct(all_types)
         anchor = right_types[0] if right_types[0] != target else (
             right_types[1] if len(right_types) > 1 else None)
     else:
-        target = _first_distinct(left_types) or _first_distinct(find_object_types(normalised))
+        target = _first_distinct(left_types) or _first_distinct(
+            _drop_negated(normalised, find_object_types(normalised)))
         anchor = right_types[0] if right_types else None
         if anchor == target and len(right_types) > 1:
             anchor = right_types[1]

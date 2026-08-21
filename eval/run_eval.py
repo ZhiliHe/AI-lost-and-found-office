@@ -95,15 +95,32 @@ def answer_as_the_user(reply, scene, obj, targets=()):
                 return option
         return anchors[0] if anchors else "i don't know"
 
-    value = obj.get("attributes", {}).get(key)
+    # Every value any view gave this object, not just the one view we happened
+    # to pick as "the" target. Retrieval merges the views and votes, so the
+    # agent can offer "medium or large" for a bottle that one photo called
+    # small - and a simulated owner who insists on "small" is not being
+    # realistic, it is answering about a different photograph. That
+    # disagreement is worth measuring (run_recall.py does, as attribute
+    # accuracy); it should not masquerade as a failure to clarify.
+    values = []
+    for _, other in targets or ():
+        value = (other.get("attributes") or {}).get(key)
+        if value and value not in values:
+            values.append(value)
+    if not values:
+        value = obj.get("attributes", {}).get(key)
+        values = [value] if value else []
     options = reply.options or []
 
     # yes/no shape: "Was it the one with X?"
     if len(options) == 1:
-        return "yes" if value == options[0] else "no"
-    if value is None:
+        return "yes" if options[0] in values else "no"
+    if not values:
         return "i don't know"
-    return str(value)
+    for option in options:
+        if option in values:
+            return str(option)
+    return str(values[0])
 
 
 def run_case(index, cfg, case):
