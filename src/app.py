@@ -101,6 +101,97 @@ APP_CSS = """
     background: #fff;
 }
 
+/* The page is a light design. Chrome follows the operating system, so on a
+   dark-mode laptop Gradio painted its own text white and left our cream
+   panels underneath - white on cream, unreadable, and only on someone else's
+   machine. Pinning the colours we depend on is the fix; inheriting a theme we
+   did not design for is not something to discover on a projector. */
+#app-root,
+#app-root .prose,
+#app-root label,
+#app-root p,
+#app-root span,
+#app-root li,
+#app-root h1, #app-root h2, #app-root h3, #app-root strong {
+    color: var(--ink);
+}
+
+#app-root .message-wrap .message,
+#app-root .bubble-wrap .message {
+    color: var(--ink) !important;
+}
+
+#hero h1, #hero p, #hero strong, #hero em, #hero li {
+    color: var(--ink);
+}
+
+#hero p, #hero li {
+    color: var(--muted);
+}
+
+#status, #status p, #status strong {
+    color: var(--ink);
+    background: #fff;
+}
+
+#wake-banner {
+    margin: 0 0 10px 0;
+}
+
+#wake-banner .lopa-state {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    padding: 12px 16px;
+    border-radius: 12px;
+    border: 1px solid var(--edge);
+    font-size: 1.05rem;
+    font-weight: 600;
+    letter-spacing: 0.01em;
+}
+
+#wake-banner .lopa-state .dot {
+    width: 11px;
+    height: 11px;
+    border-radius: 50%;
+    flex: none;
+}
+
+#wake-banner .awake {
+    background: linear-gradient(120deg, #eaf7ee 0%, #f4fbf6 100%);
+    border-color: #9ad0ab;
+    color: #1d6b34;
+}
+
+#wake-banner .awake .dot {
+    background: #2f9e51;
+    animation: lopa-pulse 1.4s ease-in-out infinite;
+}
+
+#wake-banner .asleep {
+    background: #fffaf0;
+    color: var(--muted);
+}
+
+#wake-banner .asleep .dot {
+    background: #c3b4a4;
+}
+
+#wake-banner .always {
+    background: #fff6e8;
+    border-color: #e8c79a;
+    color: #8a5a1c;
+}
+
+#wake-banner .always .dot {
+    background: #d9932f;
+}
+
+@keyframes lopa-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50%      { opacity: 0.35; transform: scale(0.82); }
+}
+
 @media (max-width: 900px) {
     #hero {
         padding: 14px;
@@ -176,6 +267,47 @@ def _chatbot(**kwargs):
 
 
 MIC_LABEL = 'Listening - say "Hey Lopa" (English / 한국어 / 中文)'
+
+
+def _supports_streaming():
+    """Can this Gradio stream the microphone? Asked without building anything,
+    because the banner is laid out before the microphone is."""
+    import inspect
+    try:
+        return "streaming" in inspect.signature(gr.Audio.__init__).parameters
+    except (TypeError, ValueError):
+        return False
+
+
+def banner_html(state):
+    """The one thing the room needs to know: is it listening to me right now?
+
+    A voice demo has no cursor and no button being pressed, so without this the
+    audience cannot tell "it is thinking" from "it never heard you" - and
+    neither can the presenter, which is worse.
+
+    Green means one specific thing: the wake word was heard and it is awake.
+    Not "the microphone is on", and not "the wake word is switched off, so
+    everything counts" - that state gets its own, quieter line. Once the light
+    means two things it stops being worth looking at.
+    """
+    if state == "awake":
+        return ('<div class="lopa-state awake"><span class="dot"></span>'
+                'Lopa is listening</div>')
+    if state == "always":
+        return ('<div class="lopa-state always"><span class="dot"></span>'
+                'Wake word off - Lopa answers anything it hears</div>')
+    return ('<div class="lopa-state asleep"><span class="dot"></span>'
+            'Asleep - say "Hey Lopa"</div>')
+
+
+def banner_state(ear):
+    """asleep | awake | always - from the gate itself, never from typing."""
+    if ear is None:
+        return "asleep"
+    if not ear.enabled:
+        return "always"
+    return "awake" if ear.awake else "asleep"
 
 
 def _checkbox(**kwargs):
@@ -261,6 +393,32 @@ AUTO_RECORD_JS = """
 """
 
 
+# Gradio follows the operating system's dark mode by adding a "dark" class to
+# the body, and then paints its own panels near-black. This page is a light
+# design - cream panels, dark ink - so on a dark-mode laptop the two fight:
+# Gradio's white label text lands on our cream panel and our dark heading lands
+# on Gradio's near-black block. Half the page becomes unreadable, and only on
+# someone else's machine.
+#
+# Rather than write a second full theme the night before a demo, we hold the
+# page in the light mode it was designed for. The observer is there because
+# Gradio re-applies the class on some navigations.
+FORCE_LIGHT_JS = """
+() => {
+  const strip = () => {
+    document.body.classList.remove('dark');
+    document.documentElement.classList.remove('dark');
+    const app = document.querySelector('gradio-app');
+    if (app) app.classList.remove('dark');
+  };
+  strip();
+  new MutationObserver(strip).observe(document.body, {
+    attributes: true, attributeFilter: ['class'],
+  });
+}
+"""
+
+
 def build():
     global INDEX
     INDEX = SceneIndex.load(CFG["paths"]["index"])
@@ -280,6 +438,10 @@ def build():
         )
 
         session_state = gr.State(None)
+        # Built before the microphone so it sits at the top of the page, which
+        # is where a room full of people will look for it.
+        wake_banner = gr.HTML(banner_html("asleep"), elem_id="wake-banner",
+                              visible=_supports_streaming())
 
         with gr.Row():
             with gr.Column(scale=1, elem_id="left-panel"):
@@ -357,6 +519,20 @@ def build():
                 position = resolve_position(message, len(session.candidates))
                 if position is not None:
                     asked = str(position + 1)
+            elif session.pending_key and session.pending_options:
+                # Every question the agent asks arrives as a numbered list on
+                # screen - rooms, colours, neighbours - so people answer it the
+                # way people answer lists: "2", "두 번째", "the last one". Only
+                # accepting that while photos were showing meant "오른쪽 거" was
+                # read as a colour, matched nothing, and cost a turn.
+                position = resolve_position(message, len(session.pending_options))
+                if position is not None:
+                    asked = str(session.pending_options[position])
+                elif lang != "en":
+                    matched = i18n.normalize_answer(
+                        message, session.pending_key, session.pending_options, lang)
+                    if matched is not None:
+                        asked = str(matched)
             elif session.pending_key and lang != "en":
                 # The question went out in Korean, so the answer comes back in
                 # Korean - but the agent only knows canonical English values.
@@ -365,8 +541,12 @@ def build():
                 if matched is not None:
                     asked = str(matched)
 
-            reply = (session.reply(asked) if session.pending_key
-                     else session.start(asked))
+            # Always through reply(): it delegates to start() for a genuinely
+            # new question, and otherwise keeps the search we are already in.
+            # Calling start() directly whenever nothing was pending threw away
+            # the object named three sentences ago, so "the green one" after a
+            # shortlist answered "I'm not sure what you're looking for".
+            reply = session.reply(asked)
 
             spoken = i18n.localize(reply, lang, session.parsed, session._wanted())
             history.append({"role": "assistant", "content": spoken})
@@ -394,6 +574,34 @@ def build():
         def clear():
             return [], None, [], ""
 
+        def from_gallery(event: gr.SelectData, history, session, speak):
+            """Clicking a photo means "that one is mine".
+
+            It was only enlarging the picture. Pointing is the most direct
+            answer available - shorter than any sentence, impossible to
+            mishear, and the same gesture in every language - so it should
+            settle the search, not zoom it.
+            """
+            if session is None or event is None:
+                return gr.update(), session, gr.update(), gr.update()
+            voice.stop()
+            reply = session.pick_by_index(event.index)
+            if reply is None:
+                return gr.update(), session, gr.update(), gr.update()
+
+            lang = getattr(session, "demo_lang", "en")
+            spoken = i18n.localize(reply, lang, session.parsed, session._wanted())
+            history = list(history or []) + [
+                {"role": "user", "content": "(picked from the photos)"},
+                {"role": "assistant", "content": spoken},
+            ]
+            if speak:
+                voice.say(spoken, lang)
+            shown = reply.candidates or session.candidates
+            note = f"**Resolved.** **{len(reply.candidates)}** candidate(s)"
+            return (history, session,
+                    gallery_for(shown, session._wanted(), lang), note)
+
         def from_microphone(path):
             """Recording -> text in the box. The search itself runs in respond()."""
             if not path:
@@ -416,6 +624,11 @@ def build():
                    [chat, session_state, view, status]) \
            .then(lambda: "", None, box)
         reset.click(clear, None, [chat, session_state, view, status])
+        try:
+            view.select(from_gallery, [chat, session_state, speak_back],
+                        [chat, session_state, view, status])
+        except (AttributeError, TypeError):
+            pass          # older Gradio: the photos stay click-to-enlarge only
         def from_stream(chunk, collector, ear, history, session, speak, wake):
             """One chunk of live microphone audio.
 
@@ -430,7 +643,12 @@ def build():
             if ear is None:
                 ear = voice.WakeGate()
             ear.enabled = bool(wake)
-            idle = (gr.update(), session, gr.update(), gr.update(), collector, ear)
+            # Recomputed every chunk, so the banner goes back to "asleep" on
+            # its own when the conversation stops - no extra timer, and the
+            # room can see the state change as it happens.
+            state = banner_html(banner_state(ear))
+            idle = (gr.update(), session, gr.update(), gr.update(),
+                    collector, ear, state)
             if chunk is None:
                 return idle
 
@@ -454,7 +672,7 @@ def build():
                 text, detected = voice.transcribe_samples(phrase[1], phrase[0])
             except Exception as exc:                      # noqa: BLE001
                 return (gr.update(), session, gr.update(),
-                        f"Could not transcribe: {exc}", collector, ear)
+                        f"Could not transcribe: {exc}", collector, ear, state)
             if not text:
                 return idle
 
@@ -468,23 +686,26 @@ def build():
                 # the status line: during a demo, "it ignored me" and "it is
                 # broken" look identical from the audience.
                 return (gr.update(), session, gr.update(),
-                        f'(asleep - say "Hey Lopa") heard: {text}', collector, ear)
+                        f'(asleep - say "Hey Lopa") heard: {text}',
+                        collector, ear, banner_html("asleep"))
             if action == voice.WakeGate.WOKE:
                 lang = i18n.detect_language(text)
                 if speak:
                     voice.say(i18n.WAKE_REPLY.get(lang, i18n.WAKE_REPLY["en"]), lang)
                 woken = list(history or []) + [
                     {"role": "assistant", "content": i18n.WAKE_PROMPT}]
-                return (woken, session, gr.update(), "listening...", collector, ear)
+                return (woken, session, gr.update(), "listening...",
+                        collector, ear, banner_html(banner_state(ear)))
 
             history, session, gallery, note = respond(said, history, session, speak)
-            return history, session, gallery, note, collector, ear
+            return (history, session, gallery, note, collector, ear,
+                    banner_html(banner_state(ear)))
 
         if mic is not None and hands_free:
             mic.stream(
                 from_stream,
                 [mic, listening, gate, chat, session_state, speak_back, wake_only],
-                [chat, session_state, view, status, listening, gate],
+                [chat, session_state, view, status, listening, gate, wake_banner],
                 stream_every=0.4,
                 show_progress="hidden",
             )
@@ -505,6 +726,11 @@ def build():
             # until it is cleared, so without this the person has to press x
             # before they can record again - three clicks per sentence, in
             # front of an audience, every time.
+
+        try:
+            demo.load(None, None, None, js=FORCE_LIGHT_JS)
+        except TypeError:
+            pass
 
         if mic is not None and hands_free:
             try:

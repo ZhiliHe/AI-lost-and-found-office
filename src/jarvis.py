@@ -43,7 +43,8 @@ POSITION_WORDS = {
     "두번째": 1, "가운데": 1, "중간": 1,
     "第二": 1, "中间": 1,
     "third": 2, "3rd": 2,
-    "세번째": 2, "第三": 2,
+    "세번째": 2, "세": 2, "第三": 2,
+    "fourth": 3, "4th": 3, "네번째": 3, "第四": 3,
     "last": -1, "right": -1, "rightmost": -1,
     "마지막": -1, "오른쪽": -1, "오른": -1, "제일오른쪽": -1,
     "最后": -1, "右边": -1, "右": -1, "最右": -1,
@@ -73,8 +74,32 @@ def order_candidates_left_to_right(candidates):
 
 
 def resolve_position(text, count):
-    """"왼쪽거" -> 0, "the last one" -> count-1. None if it is not positional."""
-    squashed = "".join(ch for ch in str(text).lower() if ch.isalnum())
+    """"왼쪽거" -> 0, "2" -> 1, "the last one" -> count-1.
+
+    None if the sentence is not pointing at a position at all.
+
+    Anything the agent offers is a numbered list on screen - photos, rooms,
+    colours - so people point at it the way they point at a list: by number,
+    by order, or by side. Accepting only "2" and only while photos are showing
+    meant "오른쪽 거" was read as a colour, matched nothing, and cost a turn.
+    """
+    from .vocab import to_simplified
+
+    if count <= 0:
+        return None
+    raw = to_simplified(text).strip()
+
+    # A bare number, or a number with the counter people put after it:
+    # "2", "2번", "2번째", "第2个", "number 2".
+    digits = "".join(ch if ch.isdigit() else " " for ch in raw).split()
+    letters = "".join(ch for ch in raw.lower() if ch.isalpha() or 0xAC00 <= ord(ch) <= 0xD7A3)
+    if digits and (not letters or letters in ("no", "number", "num", "번", "번째",
+                                              "개", "번호", "第", "个", "번쨰")):
+        index = int(digits[0]) - 1
+        if 0 <= index < count:
+            return index
+
+    squashed = "".join(ch for ch in raw.lower() if ch.isalnum())
     best = None
     for word, index in POSITION_WORDS.items():
         if word in squashed and (best is None or len(word) > len(best[0])):
@@ -154,8 +179,7 @@ class Conversation:
             if matched is not None:
                 text = str(matched)
 
-        reply = (self.session.reply(text) if self.session.pending_key
-                 else self.session.start(text))
+        reply = self.session.reply(text)   # see the note in src/app.py
         return self.render(reply)
 
     def render(self, reply):
@@ -169,6 +193,13 @@ class Conversation:
             for line in i18n.shortlist_lines(self.shown, self.lang, wanted):
                 print(f"     {line}")
             show_photos(self.shown, self.cfg)
+            return reply
+
+        if reply.kind == "list":
+            # A list is read, not pointed at: print it and stop. Opening eleven
+            # photos is not showing someone their options, it is burying them.
+            self.shown = []
+            self.respond(spoken)
             return reply
 
         self.shown = []

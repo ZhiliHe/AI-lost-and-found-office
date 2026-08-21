@@ -1007,3 +1007,67 @@ def test_a_volunteered_room_is_kept_even_when_we_asked_something_else(index, con
     session.pending_key, session.pending_options = "size", ["medium", "small"]
     session._apply_answer("it was in the classroom I think")
     assert session.parsed.location == "classroom"
+
+
+def test_a_room_name_in_korean_is_understood(index, config):
+    """The folder names are English; the demo is spoken in three languages.
+    Asked "어디에 두셨나요?" a person answers "탕비실", and until those names
+    were listed the answer matched nothing, the constraint was dropped, and the
+    agent asked another question as if it had been told nothing at all."""
+    from src.query_parser import parse as parse_query
+    known = ("7f_tearoom", "6f_meetingroom", "703", "hotelroom")
+    assert parse_query("탕비실", known_locations=known).location == "7f_tearoom"
+    assert parse_query("7층 탕비실", known_locations=known).location == "7f_tearoom"
+    assert parse_query("茶水间", known_locations=known).location == "7f_tearoom"
+    assert parse_query("회의실", known_locations=known).location == "6f_meetingroom"
+    assert parse_query("호텔 방", known_locations=known).location == "hotelroom"
+
+
+def test_more_detail_refines_instead_of_starting_over(index, config):
+    """After a give-up or a shortlist there is no pending question, but people
+    keep talking: "the green one". Starting a fresh search there loses the
+    object they named three sentences ago and answers "I'm not sure what you're
+    looking for" - from their side, we stopped listening."""
+    session = Session(index, {"agent": {"max_clarify_turns": 1, "top_k_scenes": 5}})
+    session.start("where is my bottle")
+    session.reply("i don't know")            # burns the turn, ends the questions
+    session.pending_key, session.pending_options = None, []
+    session.reply("the black one")
+    assert session.parsed.target_type == "bottle"     # still looking for a bottle
+    assert session.constraints.get("color") == "black"
+
+
+def test_answering_a_different_question_does_not_burn_the_one_we_asked(index, config):
+    """Asked about the room and told the colour again, the room question has
+    still not been answered - so it must stay available to ask."""
+    session = Session(index, config)
+    session.start("where is my bottle")
+    session.pending_key, session.pending_options = "location", ["office", "lounge"]
+    session._apply_answer("black")
+    assert "location" not in session.asked
+    assert session.constraints.get("color") == "black"
+
+
+def test_asking_for_all_of_them_lists_instead_of_narrowing(index, config):
+    """The whole agent is built to REDUCE a candidate set. Someone asking
+    "list all the bottles" wants the opposite, and clarifying would be
+    answering a question they did not ask."""
+    from src.agent import wants_all
+    for query in ("list all the bottles", "물병 전체를 나열해줘", "모든 우산 보여줘",
+                  "所有的水瓶", "有哪些水瓶"):
+        assert wants_all(query), query
+    for query in ("where is my bottle", "내 물병 어딨어", "我的水瓶在哪"):
+        assert not wants_all(query), query
+
+    reply = Session(index, config).start("list all the bottles")
+    assert reply.kind == "list"
+    assert len(reply.candidates) == 3          # every bottle in the fixture
+    assert reply.text.count("\n") == 3         # header plus one line each
+
+
+def test_a_list_contains_only_what_was_asked_for(index, config):
+    """FUZZY_TYPE_GROUPS earns its keep while narrowing - a folded umbrella
+    really was read as a bag. But a list claims to be complete AND correct:
+    "all 11 umbrellas" with seven backpacks in it is a wrong answer."""
+    reply = Session(index, config).start("list all the bottles")
+    assert {c["object"]["type"] for c in reply.candidates} == {"bottle"}

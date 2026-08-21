@@ -22,7 +22,7 @@ showing a broken template - a wrong-language answer is recoverable, a
 `{place}` on screen is not.
 """
 
-from .vocab import detect_language  # noqa: F401  (re-exported for callers)
+from .vocab import detect_language, to_simplified  # noqa: F401  (re-exported)
 
 # --- object types -----------------------------------------------------------
 TYPE_NAMES = {
@@ -102,8 +102,12 @@ LOCATION_NAMES = {
     "711":             {"ko": "711호",        "zh": "711房间"},
     "6f_meetingroom":  {"ko": "6층 회의실",    "zh": "6楼会议室"},
     "7f_tearoom":      {"ko": "7층 탕비실",    "zh": "7楼茶水间"},
-    "8f_lobbytable":   {"ko": "8층 로비 테이블", "zh": "8楼大堂桌"},
-    "8f_lobbytable_b": {"ko": "8층 로비 테이블", "zh": "8楼大堂桌"},
+    # Two different tables. They used to render identically, so the agent
+    # offered "the 8th floor lobby table or the 8th floor lobby table" and the
+    # person had no way to choose - the question looked like a bug, and
+    # whichever they picked was a coin toss.
+    "8f_lobbytable":   {"ko": "8층 로비 테이블 A", "zh": "8楼大堂桌A"},
+    "8f_lobbytable_b": {"ko": "8층 로비 테이블 B", "zh": "8楼大堂桌B"},
     "hotelroom":       {"ko": "호텔 방",       "zh": "酒店房间"},
 }
 
@@ -200,6 +204,13 @@ PHRASES = {
         "en": "Then I don't have it. I checked every photo I have of {where}.",
         "ko": "그렇다면 제가 가진 사진에는 없습니다. {where}의 사진은 모두 확인했습니다.",
         "zh": "那我这里没有。{where}的照片我都看过了。",
+    },
+    # "list every bottle you have" - the opposite of narrowing down, so it gets
+    # its own sentence rather than being squeezed into the found/choose ones.
+    "found_all": {
+        "en": "I found {n} {what}:",
+        "ko": "{what} {n}개를 찾았습니다:",
+        "zh": "找到{n}个{what}：",
     },
     "give_up": {
         "en": "I still see {n} possible matches. Here are the most likely ones:",
@@ -413,7 +424,9 @@ def normalize_answer(text, key, options, lang):
     """
     if not options or lang == "en":
         return None
-    said = "".join(ch for ch in str(text).lower() if ch.isalnum())
+    # A traditional-character answer has to reach the same options a
+    # simplified one does; Whisper chooses the script, the speaker does not.
+    said = "".join(ch for ch in to_simplified(text).lower() if ch.isalnum())
     if not said:
         return None
 
@@ -460,6 +473,15 @@ def localize(reply, lang, parsed=None, wanted=None):
         return phrase(QUESTION_PHRASE[reply.asked_key], lang,
                       n=len(candidates),
                       options=join_options(reply.asked_key, reply.options, lang))
+
+    if kind == "list":
+        # The header plus one line per match. shortlist_lines already numbers
+        # them and names the room in the right language.
+        target = getattr(parsed, "target_type", None)
+        header = phrase("found_all", lang, n=len(candidates),
+                        what=type_name(target, lang) if target else "")
+        return "\n".join([header.strip()]
+                          + shortlist_lines(candidates, lang, wanted))
 
     if kind == "giveup":
         return phrase("give_up", lang, n=len(candidates))

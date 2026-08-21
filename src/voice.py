@@ -264,12 +264,21 @@ def write_wav(samples, path):
 
 
 def transcribe(path):
-    """Audio file -> (text, language). Whisper detects the language itself."""
+    """Audio file -> (text, language), restricted to the three we understand."""
     _ensure_numba()
-    import mlx_whisper
+    import numpy as np
 
-    result = mlx_whisper.transcribe(str(path), path_or_hf_repo=_WHISPER_REPO)
-    return (result.get("text") or "").strip(), result.get("language") or "en"
+    try:
+        with wave.open(str(path), "rb") as handle:
+            frames = handle.readframes(handle.getnframes())
+            rate = handle.getframerate()
+    except (wave.Error, EOFError, OSError):
+        # Not a plain WAV - hand it to Whisper's own loader, which shells out
+        # to ffmpeg. Language stays restricted there too.
+        import mlx_whisper
+        result = mlx_whisper.transcribe(str(path), path_or_hf_repo=_WHISPER_REPO)
+        return (result.get("text") or "").strip(), result.get("language") or "en"
+    return transcribe_samples(np.frombuffer(frames, dtype="int16"), rate)
 
 
 def is_talking():
@@ -316,6 +325,53 @@ def resample_to_whisper(samples, sample_rate):
         return samples[picks].astype("float32")
 
 
+# Whisper knows ninety-nine languages. We understand three, and everything
+# downstream - the vocabulary, the templates, the wake word - is built for
+# those three only.
+#
+# Left to choose freely on a short, quiet or noisy phrase it will happily
+# decide a Korean sentence was Malay or Japanese and transcribe it as such.
+# The result is not a near miss that our matching can recover from; it is a
+# different script entirely, so nothing matches, the name is never heard, and
+# the room sees a system that simply ignored someone.
+UNDERSTOOD_LANGUAGES = ("en", "ko", "zh")
+
+
+def best_understood(scores):
+    """The most likely of OUR languages, whatever the model preferred.
+
+    Separated out so it can be tested without a model: given a distribution
+    that puts Malay first and Korean fourth, the answer must still be Korean,
+    because Malay is not something the rest of the system can act on.
+    """
+    return max(UNDERSTOOD_LANGUAGES, key=lambda code: scores.get(code, 0.0))
+
+
+def _restricted_language(audio):
+    """Which of OUR three languages this audio most sounds like.
+
+    Whisper's own detector is asked for its full probability distribution and
+    we take the best of the three we support, rather than letting it commit to
+    a language we cannot act on. Returns None if the model cannot be reached,
+    in which case the caller falls back to letting Whisper decide.
+    """
+    try:
+        import mlx.core as mx
+        from mlx_whisper.audio import (N_FRAMES, N_SAMPLES,
+                                       log_mel_spectrogram, pad_or_trim)
+        from mlx_whisper.transcribe import ModelHolder
+
+        model = ModelHolder.get_model(_WHISPER_REPO, mx.float16)
+        mel = log_mel_spectrogram(audio, n_mels=model.dims.n_mels,
+                                  padding=N_SAMPLES)
+        segment = pad_or_trim(mel, N_FRAMES, axis=-2).astype(mx.float16)
+        _, probabilities = model.detect_language(segment)
+        scores = probabilities[0] if isinstance(probabilities, list) else probabilities
+        return best_understood(scores)
+    except Exception:                                     # noqa: BLE001
+        return None
+
+
 def transcribe_samples(samples, sample_rate):
     """Audio already in memory -> (text, language).
 
@@ -327,7 +383,11 @@ def transcribe_samples(samples, sample_rate):
     import mlx_whisper
 
     audio = resample_to_whisper(to_mono_float(samples), sample_rate)
-    result = mlx_whisper.transcribe(audio, path_or_hf_repo=_WHISPER_REPO)
+    options = {"path_or_hf_repo": _WHISPER_REPO}
+    language = _restricted_language(audio)
+    if language:
+        options["language"] = language
+    result = mlx_whisper.transcribe(audio, **options)
     return (result.get("text") or "").strip(), result.get("language") or "en"
 
 
@@ -453,8 +513,33 @@ WAKE_WORDS = (
     # Mixed script: Whisper often writes the greeting in one alphabet and the
     # name in another, especially at the start of a Korean sentence.
     "hey로파", "헤이lopa", "헤이lofa",
-    # Chinese
-    "嘿罗帕", "嘿洛帕", "海罗帕", "你好罗帕", "罗帕", "洛帕",
+)
+
+# Chinese and Korean are written in syllables, and the name is not a word in
+# either. Whisper therefore picks whichever characters SOUND right, and picks
+# differently every time: 嘿罗帕 once, 嘿洛趴 the next, 嘿罗怕 after that.
+# Listing spellings by hand is a losing game - you add the one you just saw and
+# the following attempt produces another homophone, which is exactly how this
+# looked from the outside: "I added the word and it still does not wake".
+#
+# So the syllables are listed instead, and every combination is generated. It
+# costs a few hundred harmless strings and ends the whole class of problem.
+_SOUNDS_HEY_ZH = ("嘿", "黑", "海", "嗨", "咳", "诶")
+_SOUNDS_LO_ZH = ("罗", "洛", "萝", "逻", "锣", "落", "啰")
+_SOUNDS_PA_ZH = ("帕", "怕", "趴", "啪", "爬", "巴", "吧", "拍", "扒")
+
+_SOUNDS_HEY_KO = ("헤이", "해이", "하이", "에이", "헤")
+_SOUNDS_LO_KO = ("로", "노", "러", "라", "루")
+_SOUNDS_PA_KO = ("파", "바", "빠", "퍼", "포", "화")
+
+WAKE_WORDS += tuple(
+    hey + lo + pa
+    for hey in _SOUNDS_HEY_ZH for lo in _SOUNDS_LO_ZH for pa in _SOUNDS_PA_ZH
+) + tuple(
+    lo + pa for lo in _SOUNDS_LO_ZH for pa in _SOUNDS_PA_ZH
+) + tuple(
+    hey + lo + pa
+    for hey in _SOUNDS_HEY_KO for lo in _SOUNDS_LO_KO for pa in _SOUNDS_PA_KO
 )
 
 SLEEP_AFTER_SECONDS = 45
@@ -468,12 +553,47 @@ def _squash(text):
     every space and comma removed. The map is what lets us hand back the REST
     of the sentence afterwards, with its spacing intact.
     """
+    from .vocab import to_simplified
+
     kept, positions = [], []
-    for index, character in enumerate(str(text)):
+    # Same substitution the vocabulary does: the name has to wake it when
+    # Whisper writes it in traditional characters too.
+    for index, character in enumerate(to_simplified(text)):
         if character.isalnum():
             kept.append(character.lower())
             positions.append(index)
     return "".join(kept), positions
+
+
+# Being called by the greeting alone - "헤이", "hey", "嘿" - because in a demo
+# people trail off: they say the name once, then just say "hey" the next time.
+#
+# These are matched ONLY as the opening word, and against the original text
+# rather than the squashed form. "hey" sits inside "t-hey" and "hi" inside
+# "hi-s", so the substring test the full name uses would wake it on "where did
+# they go" - which is precisely the presentation chatter the wake word exists
+# to ignore.
+WAKE_GREETINGS = ("헤이", "해이", "혜이", "헤에이", "헤이요", "하이", "에이", "예이",
+                  "안녕", "여보세요",
+                  "hey", "heyy", "hei", "hay", "hi", "hiya", "hello", "yo")
+WAKE_GREETINGS_ZH = ("嘿", "嗨", "诶", "喂")
+
+
+def _opens_with_greeting(text):
+    """(True, rest) when the sentence STARTS with a bare greeting."""
+    from .vocab import to_simplified
+    raw = to_simplified(str(text)).strip().lstrip("\"'“”‘’(（")
+    if not raw:
+        return False, ""
+
+    if raw[0] in WAKE_GREETINGS_ZH:
+        return True, raw[1:].lstrip(" ,.!?~-·、，。！？").strip()
+
+    first = raw.split()[0] if raw.split() else ""
+    bare = first.strip(",.!?~-·，。！？").lower()
+    if bare in WAKE_GREETINGS:
+        return True, raw[len(first):].lstrip(" ,.!?~-·、，。！？").strip()
+    return False, ""
 
 
 def hears_wake_word(text):
@@ -493,12 +613,28 @@ def hears_wake_word(text):
         if at >= 0 and (best is None or len(target) > best[1] - best[0]):
             best = (at, at + len(target))
     if best is None:
-        return False, ""
+        # The full name was not in there, but a bare greeting at the front is
+        # still someone addressing it.
+        return _opens_with_greeting(text)
     end = best[1]
     if end >= len(positions):
         return True, ""
     remainder = str(text)[positions[end - 1] + 1:]
     return True, remainder.lstrip(" ,.!?~-·、，。！？").strip()
+
+
+def _names_something(text):
+    """Is there a real request in here, or just the tail of a spoken name?
+
+    A word we know beats a length rule: "가방" is two characters and is a
+    question, while "呀" is one and is not. The length test is only a
+    backstop for a phrasing the vocabulary has not met yet.
+    """
+    from .vocab import find_colors, find_object_types
+    stripped = str(text).strip()
+    if find_object_types(stripped) or find_colors(stripped):
+        return True
+    return len(stripped) >= 4
 
 
 class WakeGate:
@@ -532,7 +668,15 @@ class WakeGate:
         heard, rest = hears_wake_word(text)
         if heard:
             self.touch()
-            return (self.SPEAK, rest) if rest else (self.WOKE, "")
+            # Only treat the leftover as a question if it actually asks for
+            # something. Whisper rounds a short utterance off with a particle
+            # or an interjection - "嘿罗帕呀", "헤이 로파아" - and searching for
+            # "呀" answers "I am not sure what you are looking for", which from
+            # the other side of the room is indistinguishable from never having
+            # woken up at all.
+            if rest and _names_something(rest):
+                return self.SPEAK, rest
+            return self.WOKE, ""
         if self.awake:
             self.touch()
             return self.SPEAK, text

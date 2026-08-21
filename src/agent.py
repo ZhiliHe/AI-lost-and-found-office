@@ -48,11 +48,29 @@ from .vocab import MATERIALS, SIZES, find_colors, find_object_types, is_negated,
 ASKABLE_KEYS = ["color", "near", "size", "material", "location"]
 
 # Tuning knob. Question choice = (how well the attribute splits the candidates)
-# x (how reliably a human can answer it). People remember colour far better than
-# they remember what something was made of, so material is discounted. "near"
-# sits just under colour: concrete and memorable, but slightly harder to turn
-# into a clean multiple-choice question than a colour name.
-KEY_PRIOR = {"color": 1.3, "near": 1.1, "size": 0.9, "location": 0.8, "material": 0.7}
+# x (how reliably a human can answer it). A question that divides the set
+# perfectly but that nobody can answer is worse than a blunter one: they say
+# "I don't know", and the turn is spent for nothing.
+#
+# Colour stays first: it is the one property people picture immediately, and
+# the person came to us because they do NOT know where the thing is - opening
+# with "which room was it in?" is close to asking them the question they asked.
+#
+# But LOCATION now outranks "near". Once colour is spent, "where did you have
+# it last?" is a real memory, and the options are places - "the tea room or the
+# 6th floor meeting room". "Was it next to a charger or an umbrella?" asks
+# someone to recall the furniture around an object they have already lost,
+# which is a question almost nobody can answer; they say "I don't know" and the
+# turn is gone. Location is also the only key that cannot be wrong on our side
+# either, since it is the folder the photograph came from rather than something
+# the model guessed.
+#
+# "near" is demoted for that reason alone, not because it is unreliable - the
+# geometry behind it is computed in spatial.py and is as solid as anything we
+# have. It stays because when every candidate is in one room it is often the
+# only thing left that separates them.
+KEY_PRIOR = {"color": 1.3, "location": 1.1, "size": 0.9, "near": 0.8,
+             "material": 0.7}
 
 # Sentinel for "the pending question is a pick-from-photos", not an attribute.
 PICK_KEY = "__pick__"
@@ -290,6 +308,44 @@ def comparison_text(candidates, parsed=None, limit=3):
     return "\n".join(lines)
 
 
+# "Find-all" mode: the user wants every match listed, not narrowed down to one.
+#
+# Worth having as its own mode rather than a longer answer: the whole agent is
+# built to REDUCE a candidate set, and someone asking "list all the bottles" is
+# asking for the opposite. Clarifying that would be answering a question they
+# did not ask.
+#
+# Read off the raw query, so it needs no vocabulary entry and no parser change.
+LIST_ALL_EN = re.compile(r"\b(all|every|each|everything|list|show me the)\b", re.I)
+LIST_ALL_CJK = ("모두", "모든", "전부", "전체", "다 보여", "다보여", "목록",
+                "리스트", "나열",
+                "全部", "所有", "都有", "列出", "列表", "有哪些", "哪些")
+
+
+def wants_all(text):
+    """Is this "which one is mine?" or "what have you got?"."""
+    from .vocab import to_simplified
+    raw = to_simplified(text or "")
+    if LIST_ALL_EN.search(raw):
+        return True
+    return any(word in raw for word in LIST_ALL_CJK)
+
+
+def describe_all(candidates, parsed, wanted=None):
+    """Every match, numbered, with where each one is."""
+    kind = parsed.target_type or "item"
+    count = len(candidates)
+    # "11 umbrellas", but never "11 keyss" or "11 glassess".
+    plural = kind if count == 1 or kind.endswith("s") else f"{kind}s"
+    header = f"I found {count} {plural}:"
+    lines = [header]
+    for position, cand in enumerate(candidates, 1):
+        place = describe_place(cand["scene"], cand["object"], parsed.anchor_type)
+        lines.append(f"{position}. {describe_object(cand['object'], cand, wanted)}"
+                     f" - {place}")
+    return "\n".join(lines)
+
+
 def describe_object(obj, candidate=None, wanted=None):
     """"the blue laptop". Colour plus type, nothing else.
 
@@ -381,12 +437,33 @@ class Session:
     # ------------------------------------------------------------------ #
     def start(self, query):
         self.reset()
+        self.list_all = wants_all(query)
         self.parsed = parse(query, known_locations=self.index.locations())
         if not self.parsed.target_type:
-            return Reply("none_found",
-                         "I'm not sure what object you're looking for. "
-                         "Could you name the item? For example: \"my black bottle\".")
+            return self._ask_for_the_item()
         return self._advance()
+
+    def pick_by_index(self, position):
+        """The person pointed at the Nth photo.
+
+        Clicking a picture is the most direct answer there is - shorter than
+        any sentence and impossible to mishear - and it was being thrown away
+        as a zoom gesture. Works whether or not we were formally asking: if
+        three candidates are on screen and one of them is theirs, that settles
+        it regardless of what the pending question happened to be.
+        """
+        pool = (self.pending_options if self.pending_key == PICK_KEY
+                else [cand["object"]["id"] for cand in self.candidates])
+        if not (0 <= position < len(pool)):
+            return None
+        self.pending_key, self.pending_options = None, []
+        self.picked = pool[position]
+        return self._advance()
+
+    def _ask_for_the_item(self):
+        return Reply("none_found",
+                     "I'm not sure what object you're looking for. "
+                     "Could you name the item? For example: \"my black bottle\".")
 
     def reply(self, user_text):
         if self.parsed is None:
@@ -399,7 +476,44 @@ class Session:
             return self.start(user_text)
         if self.pending_key:
             self._apply_answer(user_text)
+        else:
+            self._refine(user_text)
         return self._advance()
+
+    def _refine(self, user_text):
+        """More detail about the SAME search, with no question pending.
+
+        This is the state after a give-up or a shortlist, and people keep
+        talking there: "the green one", "초록색이라고", "it was in the tea
+        room". Starting a fresh search on that loses the object they named
+        three sentences ago and answers "I'm not sure what you're looking for"
+        - to them, we just stopped listening. `_looks_like_a_new_question` has
+        already ruled out anything that names a different object, so whatever
+        is left is extra detail about this one.
+
+        New information is progress, so the turn budget is returned; `asked`
+        is kept, which is what stops it circling back to a question already
+        answered.
+        """
+        extra = parse(user_text, known_locations=self.index.locations())
+        learned = False
+
+        for key, value in (extra.attributes or {}).items():
+            if value and self.constraints.get(key) != value:
+                self.constraints[key] = value
+                learned = True
+        if extra.location and self.parsed.location != extra.location:
+            self.parsed.location = extra.location
+            learned = True
+        if extra.anchor_type and extra.anchor_type != self.parsed.target_type:
+            if self.constraints.get("near") != extra.anchor_type:
+                self.constraints["near"] = extra.anchor_type
+                learned = True
+
+        if learned:
+            self.turns = 0
+            self.rejected_shortlist = False
+            self.offered_pick = False
 
     def _looks_like_a_new_question(self, text):
         """Is this a fresh search, or an answer to what we just asked?
@@ -609,9 +723,32 @@ class Session:
         key, options = self.pending_key, self.pending_options
         self.pending_key, self.pending_options = None, []
         self.asked.append(key)
+        known_before = dict(self.constraints)
+        try:
+            self._record_reply(user_text, key, options)
+        finally:
+            # If they answered a DIFFERENT question than the one we asked -
+            # repeating the colour when we asked about the room - the question
+            # we actually needed was never answered, so it should not count as
+            # asked. Only when something else was learned, which keeps this
+            # from re-asking the same thing forever.
+            answered_something_else = (key not in self.constraints
+                                       and self.constraints != known_before)
+            if answered_something_else and key in self.asked:
+                self.asked.remove(key)
+
+    def _record_reply(self, user_text, key, options):
 
         if key == PICK_KEY:
-            self._pick_from_shortlist(user_text, options)
+            if self._pick_from_shortlist(user_text, options):
+                return
+            # They did not give a number - but they may have told us something
+            # better. Shown three photos and asked "which one?", people answer
+            # "the one in the tea room" or "the green one" rather than counting.
+            # Treating that as a failed pick throws away the one piece of
+            # information that would have finished the search.
+            if not self.rejected_shortlist:
+                self._refine(user_text)
             return
 
         text = user_text.strip().lower()
@@ -707,6 +844,15 @@ class Session:
 
     # ------------------------------------------------------------------ #
     def _advance(self):
+        # Nothing to search for. Whisper mishears - "내 열쇠 찾아줘" came back as
+        # "내일 새 찾아줘" - and the sentence after a failed start names no
+        # object either. Without this the search runs unfiltered and offers
+        # every object in the building: "I found 92 matches. What colour is
+        # yours?" with fourteen colours listed is not a clarifying question,
+        # it is the system admitting it has no idea and asking anyway.
+        if not (self.parsed and self.parsed.target_type):
+            return self._ask_for_the_item()
+
         if self.rejected_shortlist:
             self.rejected_shortlist = False
             places = sorted({c["scene"].get("location") for c in self.candidates})
@@ -763,6 +909,28 @@ class Session:
                         if self.images_root else None)
             return Reply("none_found",
                          describe_not_found(self.parsed, self.index.coverage(), unindexed))
+
+        if self.list_all:
+            # Search every scene, not just the top few. A list that quietly
+            # stops at the fifth-ranked room is worse than no list: it looks
+            # complete and is not.
+            everything = find_candidates(
+                self.index, self.parsed, self.constraints,
+                top_k_scenes=len(self.index.scenes),
+                merge_across_views=self.merge_across_views)
+            everything = [c for c in everything
+                          if c["object"]["id"] not in self.rejected_ids] or self.candidates
+            # Exactly what was asked for, not the look-alikes. FUZZY_TYPE_GROUPS
+            # earns its keep while narrowing - a folded umbrella really was
+            # read as a bag, and the agent should still reach it - but a LIST
+            # claims to be complete and correct. "All 11 umbrellas" with seven
+            # backpacks in it is not a fuzzy match, it is a wrong answer.
+            exact = [c for c in everything
+                     if c["object"].get("type") == self.parsed.target_type]
+            everything = exact or everything
+            self.candidates = everything
+            return Reply("list", describe_all(everything, self.parsed, self._wanted()),
+                         candidates=everything)
 
         if len(self.candidates) == 1:
             cand = self.candidates[0]

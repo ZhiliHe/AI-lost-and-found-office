@@ -64,6 +64,40 @@ def test_every_type_the_index_can_return_has_a_name_in_each_language():
     assert not unnamed, f"no Korean/Chinese name for: {unnamed}"
 
 
+def test_traditional_characters_reach_the_same_entries():
+    """Whisper picks a script per utterance and often writes Mandarin in
+    traditional characters whatever the speaker uses. Our tables are simplified,
+    so without a substitution pass "我的雨傘在哪裡" matches nothing and the demo
+    stops understanding Chinese mid-sentence, for a reason nothing on screen
+    could explain."""
+    assert find_object_types("我的雨傘在哪裡") == ["umbrella"]
+    assert find_object_types("我的筆記本電腦在哪") == ["laptop"]
+    assert find_object_types("小風扇") == ["fan"]
+    assert find_colors("綠色的瓶子") == ["green"]
+    assert find_colors("銀色") == ["silver"]
+    assert voice.hears_wake_word("嘿羅帕")[0]
+    assert i18n.normalize_answer("綠色", "color", ["green", "red"], "zh") == "green"
+    assert resolve_position("最後一個", 3) == 2
+
+
+def test_we_only_ever_write_simplified_chinese():
+    """Answering a simplified question in traditional characters is the kind of
+    detail a native speaker reads as carelessness. Everything we display is a
+    template we wrote, so this is enforceable rather than hoped for."""
+    from pathlib import Path
+    from src.vocab import TRADITIONAL_TO_SIMPLE
+    root = Path(__file__).resolve().parent.parent
+    written = []
+    for module in ("src/i18n.py", "src/jarvis.py", "src/app.py"):
+        text = (root / module).read_text(encoding="utf-8")
+        # The traditional->simplified table is the one place traditional
+        # characters belong: it exists to recognise them on the way in.
+        if "TRADITIONAL_TO_SIMPLE" in text:
+            continue
+        written += [(module, ch) for ch in text if ch in TRADITIONAL_TO_SIMPLE]
+    assert not written, f"traditional characters in output text: {written}"
+
+
 def test_colours_in_three_languages():
     assert find_colors("the black one") == ["black"]
     assert find_colors("검은색이야") == ["black"]
@@ -101,6 +135,26 @@ def test_a_missing_phrase_falls_back_to_english():
     text = i18n.phrase("found", "de", what="black bag", where="in the 703")
     assert "{" not in text
     assert "black bag" in text
+
+
+def test_two_places_never_read_as_the_same_words():
+    """The agent offers places as multiple choice. Two rooms that render
+    identically produce "the lobby table or the lobby table" - a question with
+    no answer, where whichever the person picks is a coin toss."""
+    for lang in ("ko", "zh"):
+        spoken = [i18n.location_name(place, lang) for place in i18n.LOCATION_NAMES]
+        assert len(set(spoken)) == len(spoken), (lang, spoken)
+
+
+def test_the_room_is_asked_before_the_neighbour():
+    """"Which room?" is a memory people have. "What was it next to?" asks them
+    to recall the furniture around something they have already lost - they
+    answer "I don't know" and the turn is spent for nothing."""
+    from src.agent import KEY_PRIOR
+    assert KEY_PRIOR["location"] > KEY_PRIOR["near"]
+    # ...but colour still comes first: they came to us because they do not know
+    # where it is, so opening with "which room?" asks them their own question.
+    assert KEY_PRIOR["color"] > KEY_PRIOR["location"]
 
 
 def test_options_are_joined_in_the_asking_language():
@@ -232,6 +286,40 @@ def test_the_question_after_the_name_is_kept():
     assert heard and rest == "where is my bottle?"
 
 
+def test_any_homophone_of_the_name_wakes_it():
+    """The name is not a word in Chinese or Korean, so Whisper picks whichever
+    characters sound right - and picks differently every time. Adding the exact
+    spelling you just saw is a losing game: the next attempt produces another
+    homophone. The syllables are listed and combined instead."""
+    for said in ("嘿罗帕", "嘿洛趴", "嘿罗怕", "黑萝爬", "嗨逻巴", "罗帕",
+                 "해이 로바", "하이 러퍼", "에이 노파"):
+        assert voice.hears_wake_word(said)[0], said
+
+
+def test_the_name_plus_a_stray_particle_still_just_wakes_it():
+    """Whisper rounds a short utterance off with a particle. Searching for
+    "呀" answers "I am not sure what you are looking for", which from the other
+    side of the room is indistinguishable from never having woken up."""
+    gate = voice.WakeGate()
+    assert gate.check("嘿罗帕呀")[0] == voice.WakeGate.WOKE
+    assert voice.WakeGate().check("헤이 로파아")[0] == voice.WakeGate.WOKE
+    # ...but a real question after the name still goes straight through
+    action, said = voice.WakeGate().check("嘿罗帕，我的雨伞在哪")
+    assert action == voice.WakeGate.SPEAK and said == "我的雨伞在哪"
+
+
+def test_only_the_three_languages_we_understand_are_chosen():
+    """Whisper knows ninety-nine languages and will decide a short, quiet
+    Korean sentence was Malay or Japanese. That is not a near miss our matching
+    can recover from - it is a different script, so nothing matches, the name is
+    never heard, and the room sees a system that ignored someone. Its own
+    distribution is asked for and the best of OUR three is taken."""
+    assert voice.best_understood(
+        {"ms": 0.61, "ja": 0.20, "id": 0.09, "ko": 0.06, "zh": 0.02}) == "ko"
+    assert voice.best_understood({"ja": 0.55, "zh": 0.30, "ko": 0.10}) == "zh"
+    assert voice.best_understood({"vi": 0.9}) in voice.UNDERSTOOD_LANGUAGES
+
+
 def test_ordinary_conversation_does_not_wake_it():
     for said in ("오늘 날씨 좋네", "where did I leave my keys", "我们去吃饭吧"):
         heard, _ = voice.hears_wake_word(said)
@@ -297,3 +385,59 @@ def test_across_rooms_left_means_the_first_photo():
     ]
     order = [c["object"]["id"] for c in order_candidates_left_to_right(candidates)]
     assert order == ["first", "second"]
+
+
+def test_green_means_the_wake_word_was_heard_and_nothing_else():
+    """The light has to mean one thing. It was also green whenever the wake
+    word was switched off - so typing a question lit it up, and "Lopa is
+    listening" stopped being information."""
+    from src import app
+    from src.voice import WakeGate
+
+    assert app.banner_state(None) == "asleep"
+
+    gate = WakeGate()
+    assert app.banner_state(gate) == "asleep"
+    gate.check("헤이 로파")
+    assert app.banner_state(gate) == "awake"
+
+    # switched off is its own state, not the same green as being addressed
+    off = WakeGate(enabled=False)
+    assert app.banner_state(off) == "always"
+    assert 'class="lopa-state awake"' not in app.banner_html("always")
+
+
+def test_the_greeting_alone_wakes_it():
+    """People trail off in a demo: the name once, then just "hey" after that."""
+    for said in ("헤이", "헤이!", "hey", "Hey!", "嘿", "嗨",
+                 "헤이 내 가방 어딨어", "hey where is my bottle"):
+        assert voice.hears_wake_word(said)[0], said
+    action, rest = voice.WakeGate().check("헤이 내 가방 어딨어")
+    assert action == voice.WakeGate.SPEAK and rest == "내 가방 어딨어"
+
+
+def test_a_greeting_buried_in_a_sentence_does_not():
+    """Spacing is thrown away when matching the full name, which is right for
+    Korean and Chinese - but "hey" sits inside "t-hey" and "hi" inside "hi-s".
+    Matched the same way, the bare greeting would wake on "where did they go":
+    exactly the presentation chatter the wake word exists to ignore."""
+    for said in ("where did they go", "his bag is black", "the honey jar",
+                 "they went to the tearoom", "highlight the laptop"):
+        assert not voice.hears_wake_word(said)[0], said
+
+
+def test_lists_can_be_answered_by_number_or_side_in_any_language():
+    """Every question arrives as a numbered list on screen - rooms, colours,
+    photos - so people answer it the way people answer lists. Accepting only
+    "2", and only while photos were showing, meant "오른쪽 거" was read as a
+    colour, matched nothing, and cost a turn."""
+    cases = [("오른쪽 거", 2), ("왼쪽거", 0), ("두번째", 1), ("2", 1), ("2번", 1),
+             ("2번째", 1), ("第二个", 1), ("最右", 2), ("the second one", 1),
+             ("number 3", 2), ("last one", 2)]
+    for text, expected in cases:
+        assert resolve_position(text, 3) == expected, text
+
+
+def test_a_colour_is_still_not_a_position():
+    for text in ("black", "검은색", "黑色", "透明"):
+        assert resolve_position(text, 3) is None, text

@@ -6,6 +6,7 @@ matches from the offline index. An LLM can replace only this module later, but
 it must emit the same ParsedQuery fields and must not choose results directly.
 """
 
+import re
 from dataclasses import dataclass, field
 
 from .spatial import find_predicate
@@ -148,14 +149,40 @@ def _squash(text):
 _FLOOR_PREFIX = {"1f", "2f", "3f", "4f", "5f", "6f", "7f", "8f", "9f", "10f", "b1", "b2"}
 
 
+# A floor number on its own says nothing: every localized room name starts with
+# one, so "7층" would match the tea room and 703 equally.
+_FLOOR_WORD = re.compile(r"^\s*\d+\s*(층|楼|f|층의|호실)?\s*")
+
+
 def _location_variants(name):
-    """Ways a person might refer to a folder called "7f_tearoom"."""
+    """Ways a person might refer to a folder called "7f_tearoom".
+
+    Including the way they will actually say it out loud. The folder names are
+    English and the demo is spoken in three languages, so someone answering
+    "어디에 두셨나요?" says "탕비실" or "茶水间" - and until those were listed
+    here the answer matched nothing, the constraint was silently dropped, and
+    the agent asked another question as if it had been told nothing at all.
+    That is the single most confusing thing a clarifying agent can do.
+    """
+    from .i18n import LOCATION_NAMES
+
     variants = {_squash(name)}
     for token in str(name).replace("-", "_").split("_"):
         squashed = _squash(token)
         if len(squashed) >= 3 and squashed not in _FLOOR_PREFIX:
             variants.add(squashed)
-    return {v for v in variants if len(v) >= 3}
+
+    for spoken in (LOCATION_NAMES.get(name) or {}).values():
+        variants.add(_squash(spoken))
+        # ...and without the floor, since people drop it: "탕비실", not
+        # "7층 탕비실". Only when what remains still identifies the place:
+        # strip the floor from "703房间" and you get "房间", which is every
+        # room in the building.
+        without_floor = _squash(_FLOOR_WORD.sub("", str(spoken)))
+        if len(without_floor) >= 3:
+            variants.add(without_floor)
+
+    return {v for v in variants if len(v) >= 2}
 
 
 def _find_location(text, known_locations):
