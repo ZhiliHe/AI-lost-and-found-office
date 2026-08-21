@@ -4,6 +4,7 @@ __pycache__/
 venv/
 .DS_Store
 .pytest_cache/
+.pytest_tmp/
 
 # Debug renders are regenerated; don't commit them.
 data/debug/

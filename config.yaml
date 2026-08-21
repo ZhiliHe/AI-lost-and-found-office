@@ -18,13 +18,13 @@ vlm:
   #
   # On Apple Silicon:
   #   pip install -U mlx-vlm
-  backend: mlx
-  model: models/Qwen3-VL-2B-Instruct-4bit
+  # backend: mlx
+  # model: models/Qwen3-VL-2B-Instruct-4bit
   #
   # On an NVIDIA machine:
   #   pip install torch --index-url https://download.pytorch.org/whl/cu128
-  # backend: cuda
-  # model: Qwen/Qwen2-VL-2B-Instruct   # 3B fp16 does NOT fit in 8GB VRAM
+  backend: cuda
+  model: Qwen/Qwen3-VL-2B-Instruct   # 3B fp16 does NOT fit in 8GB VRAM
 
   # Set true on networks that cannot reach huggingface.co: loads ONLY from the
   # local cache and never does the online HEAD check (which hangs forever on a

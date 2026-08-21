@@ -48,7 +48,7 @@ from .vocab import COLORS, MATERIALS, SIZES
 _EXAMPLES_OF_OBJECTS = (
     "bottle, cup, mug, backpack, bag, laptop, tablet, phone, charger, power bank, "
     "cable, headphones, earbuds, keys, wallet, ID card, book, notebook, pen, "
-    "glasses, umbrella, mouse, watch"
+    "glasses, umbrella, mouse, watch, fan, tissue"
 )
 
 SCENE_EXTRACTION_PROMPT = f"""You are the visual understanding module of a Lost & Found agent.

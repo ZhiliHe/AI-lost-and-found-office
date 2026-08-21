@@ -2,6 +2,17 @@ from src.query_parser import parse
 from src.vocab import find_colors, find_object_types, normalize_color, normalize_object_type
 
 
+def test_parse_handheld_fan():
+    """A handheld mini fan is a first-class object type, in English and in
+    Chinese, so 'where is my 手持小风扇' works like any other query."""
+    for query in ("where is my handheld fan", "我的手持小风扇在哪里",
+                  "find the mini fan", "usb fan?"):
+        assert find_object_types(query) == ["fan"], query
+    assert normalize_object_type("handheld fan") == "fan"
+    q = parse("where is my small fan")
+    assert q.target_type == "fan"
+
+
 def test_parse_simple_query():
     q = parse("Where is my bottle?")
     assert q.target_type == "bottle"

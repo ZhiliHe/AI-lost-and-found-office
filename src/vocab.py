@@ -55,7 +55,9 @@ OBJECT_SYNONYMS = {
     "watch":      ["watch", "smartwatch"],
     "skateboard": ["skateboard", "board"],
     "tissue":     ["tissue", "napkin", "serviette", "paper towel", "kitchen roll", "toilet paper", "wet wipe", "Kleenex", "loo roll", "baby wipe"],
-    "hat":        ["hat", "cap", "beanie", "headwear"],
+    "fan":        ["fan", "hand fan", "handheld fan", "handled fan",
+                   "mini fan", "portable fan", "usb fan", "electric fan",
+                   "手持风扇", "小风扇", "手持小风扇"],
 }
 
 QUERY_OBJECT_ALIASES = {
