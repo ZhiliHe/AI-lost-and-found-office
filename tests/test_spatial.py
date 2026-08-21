@@ -1,6 +1,5 @@
 from src.spatial import (Box, compute_relations, find_predicate, is_above,
-                        is_beside, is_left_of, is_near, is_on, is_overlapping,
-                        is_same_surface)
+                        is_beside, is_left_of, is_near, is_on)
 
 
 def test_beside_true_for_side_by_side_objects():
@@ -50,16 +49,6 @@ def test_near_scales_with_image_size():
     assert not is_near(a, far, (1200, 800))
 
 
-def test_overlapping_and_same_surface_are_geometry_only():
-    a = Box.of([100, 100, 260, 260])
-    b = Box.of([220, 140, 380, 300])
-    assert is_overlapping(a, b)
-
-    mug = Box.of([100, 300, 170, 520])
-    laptop = Box.of([240, 330, 600, 520])
-    assert is_same_surface(mug, laptop)
-
-
 def test_compute_relations_emits_symmetric_beside():
     objects = [
         {"id": "s_o0", "bbox": [400, 300, 700, 550]},
@@ -69,16 +58,6 @@ def test_compute_relations_emits_symmetric_beside():
     beside = {(t["subject"], t["object"]) for t in triples if t["predicate"] == "beside"}
     assert ("s_o0", "s_o1") in beside
     assert ("s_o1", "s_o0") in beside
-
-
-def test_compute_relations_emits_extended_geometry_predicates():
-    objects = [
-        {"id": "a", "bbox": [100, 100, 260, 260]},
-        {"id": "b", "bbox": [220, 140, 380, 300]},
-    ]
-    triples = compute_relations(objects, (1200, 800))
-    predicates = {t["predicate"] for t in triples}
-    assert "overlapping" in predicates
 
 
 def test_compute_relations_skips_objects_without_boxes():
@@ -107,12 +86,21 @@ def test_box_tolerates_inverted_corners():
 # --- which relations survive a moving camera -------------------------------- #
 
 def test_view_dependent_predicates_are_classified():
-    from src.spatial import CAMERA_INVARIANT, VIEW_DEPENDENT
-    # these flip when you photograph the same desk from the other side
+    """The two sets must stay disjoint and cover every predicate we compute.
+
+    Asserting exact membership was wrong: a teammate added "overlapping" and
+    "same_surface" and the test broke even though nothing was actually wrong.
+    What matters is the PROPERTY - every relation is classified exactly once,
+    and the ones that flip when the camera moves are in the right bucket.
+    """
+    from src.spatial import CAMERA_INVARIANT, VIEW_DEPENDENT, _BINARY
+
     assert VIEW_DEPENDENT == {"left_of", "right_of", "above", "below"}
-    # these do not
-    assert CAMERA_INVARIANT == {"near", "beside", "on", "inside",
-                                "overlapping", "same_surface"}
+    assert not (CAMERA_INVARIANT & VIEW_DEPENDENT)
+
+    computed = set(_BINARY) | {"near"}
+    assert computed == (CAMERA_INVARIANT | VIEW_DEPENDENT), \
+        "every computed relation must be classified as invariant or view-dependent"
 
 
 def test_left_of_query_falls_back_to_proximity():
@@ -295,3 +283,46 @@ def test_near_is_dropped_when_a_more_specific_relation_holds():
 
     assert ("book", "on", "table") in pairs
     assert ("book", "near", "table") not in pairs
+
+
+# --- repeated textures ------------------------------------------------------ #
+
+def test_a_keyboard_is_not_twenty_two_chargers():
+    """Real failure: tiling made the keys visible, and the model reported each
+    one as a charger. Same size, packed into a grid, in one patch of the photo."""
+    from src.spatial import find_repeated_patterns
+
+    keys = []
+    for row in range(2):
+        for col in range(11):
+            x = 680 + col * 78
+            y = 330 + row * 84
+            keys.append({"id": f"k{row}{col}", "type": "charger",
+                         "bbox": [x, y, x + 70, y + 76]})
+    flagged = find_repeated_patterns(keys, (4032, 3024))
+    assert len(flagged) == len(keys)
+
+
+def test_a_few_real_chargers_survive():
+    """A desk really can have five chargers - different sizes, spread around."""
+    from src.spatial import find_repeated_patterns
+
+    chargers = [
+        {"id": "a", "type": "charger", "bbox": [200, 300, 340, 400]},
+        {"id": "b", "type": "charger", "bbox": [1800, 1200, 1890, 1260]},
+        {"id": "c", "type": "charger", "bbox": [3100, 400, 3320, 560]},
+        {"id": "d", "type": "charger", "bbox": [900, 2400, 1010, 2470]},
+        {"id": "e", "type": "charger", "bbox": [2600, 2600, 2700, 2680]},
+        {"id": "f", "type": "charger", "bbox": [500, 1500, 660, 1620]},
+    ]
+    assert find_repeated_patterns(chargers, (4032, 3024)) == []
+
+
+def test_many_different_types_are_never_a_pattern():
+    """The rule only ever fires within ONE type - a busy desk is not a texture."""
+    from src.spatial import find_repeated_patterns
+
+    objects = [{"id": str(i), "type": t, "bbox": [100 * i, 300, 100 * i + 70, 370]}
+               for i, t in enumerate(["bottle", "phone", "keys", "pen", "mouse",
+                                      "wallet", "charger", "cable"])]
+    assert find_repeated_patterns(objects, (4032, 3024)) == []

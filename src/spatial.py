@@ -317,6 +317,91 @@ def deduplicate(objects, threshold=None):
     return kept
 
 
+# --- repeated textures ------------------------------------------------------
+#
+# Tiling raised recall on small objects, and brought a new failure mode with
+# it: a keyboard photographed close up became TWENTY-TWO "chargers" - one per
+# key. Every box the same size, laid out in rows, in one patch of the photo.
+#
+# No real desk holds 22 identical chargers in a lattice. A regular grid of
+# same-sized boxes is a TEXTURE (keys, ventilation slots, floor tiles, drawer
+# handles), not a pile of losable belongings. We detect the pattern and drop it,
+# because leaving it in poisons everything downstream: the agent announces 22
+# chargers, every charger query in the building resolves to this one photo, and
+# the evaluation silently measures nonsense.
+
+# Below this many of one type we never suspect a texture - a desk really can
+# have five chargers.
+PATTERN_MIN_COUNT = 6
+
+# How uniform the sizes have to be. Real objects of one type vary; keys do not.
+PATTERN_SIZE_SPREAD = 0.35
+
+# The cluster must occupy ONE patch, not the whole room. A close-up keyboard
+# can still fill a third of the frame, so this is not tight.
+PATTERN_MAX_FRACTION = 0.45
+
+# The giveaway is ALIGNMENT. Keys sit in a handful of rows; real belongings do
+# not line up. If N boxes fall into far fewer than N distinct horizontal bands,
+# we are looking at a grid. This is what lets the size and area limits stay
+# loose without flagging a genuinely cluttered desk.
+PATTERN_ROWS_RATIO = 3
+
+
+def _spread(values):
+    """Coefficient of variation. 0 = all identical."""
+    if not values:
+        return 1.0
+    mean = sum(values) / len(values)
+    if mean <= 0:
+        return 1.0
+    variance = sum((v - mean) ** 2 for v in values) / len(values)
+    return (variance ** 0.5) / mean
+
+
+def _rows_like_a_grid(boxes):
+    """Do these boxes line up in a few rows, the way keys do?"""
+    heights = sorted(b.h for b in boxes)
+    tolerance = max(1.0, heights[len(heights) // 2] * 0.6)
+
+    bands = []
+    for centre in sorted(b.cy for b in boxes):
+        if not bands or abs(centre - bands[-1]) > tolerance:
+            bands.append(centre)
+    return len(bands) * PATTERN_ROWS_RATIO <= len(boxes)
+
+
+def find_repeated_patterns(objects, image_wh):
+    """Ids of objects that look like a repeated texture rather than belongings."""
+    by_type = {}
+    for obj in objects:
+        by_type.setdefault(obj.get("type"), []).append(obj)
+
+    width, height = image_wh
+    flagged = []
+    for group in by_type.values():
+        if len(group) < PATTERN_MIN_COUNT:
+            continue
+        boxes = [Box.of(o["bbox"]) for o in group]
+        if _spread([b.area for b in boxes]) > PATTERN_SIZE_SPREAD:
+            continue                      # sizes vary - probably real objects
+
+        # how much of the frame the whole cluster covers
+        x1 = min(b.x1 for b in boxes)
+        y1 = min(b.y1 for b in boxes)
+        x2 = max(b.x2 for b in boxes)
+        y2 = max(b.y2 for b in boxes)
+        hull = max(1.0, (x2 - x1) * (y2 - y1))
+        if hull / max(1.0, width * height) > PATTERN_MAX_FRACTION:
+            continue                      # spread across the room - real
+
+        if not _rows_like_a_grid(boxes):
+            continue
+
+        flagged.extend(o["id"] for o in group)
+    return flagged
+
+
 def normalize_predicate(text):
     """'to the left of' -> 'left_of'. Returns None if nothing matches."""
     t = text.strip().lower()

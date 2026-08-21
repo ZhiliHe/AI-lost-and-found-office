@@ -21,7 +21,7 @@ from PIL import Image
 
 from .config import PROJECT_ROOT, load_config
 from .prompts import SCENE_EXTRACTION_PROMPT
-from .spatial import compute_relations, deduplicate
+from .spatial import compute_relations, deduplicate, find_repeated_patterns
 from .tiling import (crop_tile, is_truncated, make_tiles, merge_passes,
                      relative_size, tile_to_global)
 from .vlm import VLMError, extract_json, load_backend
@@ -239,6 +239,11 @@ def _finalise(objects, caption, location, image_path, scene_id, original_wh):
     objects = [o for o in objects if is_portable(o["type"])]
     if len(objects) < before:
         print(f"(dropped {before - len(objects)} fixtures) ", end="")
+
+    texture = set(find_repeated_patterns(objects, original_wh))
+    if texture:
+        objects = [o for o in objects if o["id"] not in texture]
+        print(f"(dropped {len(texture)} as a repeated pattern) ", end="")
 
     before = len(objects)
     objects = deduplicate(objects)

@@ -7405,358 +7405,6 @@
             735.0
           ],
           "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o8",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            961.1,
-            353.6,
-            1041.0,
-            428.5
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o9",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            691.4,
-            353.6,
-            769.1,
-            428.5
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o10",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            819.0,
-            353.6,
-            894.5,
-            428.5
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o11",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            904.7,
-            361.9,
-            982.4,
-            428.5
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o12",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            749.3,
-            345.3,
-            827.0,
-            411.8
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o13",
-          "type": "charger",
-          "attributes": {
-            "color": "black",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            515.0,
-            785.0,
-            608.3,
-            834.9
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o14",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1086.5,
-            604.4,
-            1164.2,
-            654.3
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o15",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            686.0,
-            324.5,
-            749.3,
-            378.6
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o16",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1493.6,
-            330.2,
-            1561.9,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o17",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            947.4,
-            330.2,
-            1015.7,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o18",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            879.1,
-            330.2,
-            947.4,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o19",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1083.9,
-            330.2,
-            1152.2,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o20",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1152.2,
-            330.2,
-            1220.5,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o21",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1220.5,
-            330.2,
-            1288.8,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o22",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1288.8,
-            330.2,
-            1357.1,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o23",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1425.3,
-            330.2,
-            1493.6,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o24",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1561.9,
-            330.2,
-            1630.2,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o25",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1630.2,
-            330.2,
-            1698.5,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o26",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            674.3,
-            330.2,
-            742.5,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o27",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1015.7,
-            330.2,
-            1083.9,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o28",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1357.1,
-            330.2,
-            1425.3,
-            416.0
-          ],
-          "confidence": 0.99
-        },
-        {
-          "id": "hotelroom_front_o29",
-          "type": "charger",
-          "attributes": {
-            "color": "white",
-            "material": "plastic",
-            "size": "small"
-          },
-          "bbox": [
-            1698.5,
-            330.2,
-            1707,
-            416.0
-          ],
-          "confidence": 0.99
         }
       ],
       "relations": [
@@ -7773,127 +7421,72 @@
         {
           "subject": "hotelroom_front_o0",
           "predicate": "below",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o0",
-          "predicate": "near",
-          "object": "hotelroom_front_o14"
+          "object": "hotelroom_front_o4"
         },
         {
           "subject": "hotelroom_front_o0",
           "predicate": "beside",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o6"
         },
         {
           "subject": "hotelroom_front_o0",
           "predicate": "right_of",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o6"
         },
         {
           "subject": "hotelroom_front_o0",
           "predicate": "below",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o6"
         },
         {
           "subject": "hotelroom_front_o0",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o13"
+          "predicate": "beside",
+          "object": "hotelroom_front_o5"
+        },
+        {
+          "subject": "hotelroom_front_o0",
+          "predicate": "left_of",
+          "object": "hotelroom_front_o5"
         },
         {
           "subject": "hotelroom_front_o0",
           "predicate": "below",
+          "object": "hotelroom_front_o5"
+        },
+        {
+          "subject": "hotelroom_front_o1",
+          "predicate": "beside",
           "object": "hotelroom_front_o4"
         },
         {
           "subject": "hotelroom_front_o1",
-          "predicate": "beside",
-          "object": "hotelroom_front_o23"
+          "predicate": "right_of",
+          "object": "hotelroom_front_o4"
+        },
+        {
+          "subject": "hotelroom_front_o1",
+          "predicate": "above",
+          "object": "hotelroom_front_o5"
+        },
+        {
+          "subject": "hotelroom_front_o1",
+          "predicate": "on",
+          "object": "hotelroom_front_o5"
         },
         {
           "subject": "hotelroom_front_o1",
           "predicate": "right_of",
-          "object": "hotelroom_front_o23"
+          "object": "hotelroom_front_o7"
         },
         {
           "subject": "hotelroom_front_o1",
-          "predicate": "below",
-          "object": "hotelroom_front_o23"
+          "predicate": "above",
+          "object": "hotelroom_front_o0"
         },
         {
           "subject": "hotelroom_front_o1",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "beside",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "below",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "beside",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "below",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "beside",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "below",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o1",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o2",
-          "predicate": "beside",
-          "object": "hotelroom_front_o13"
-        },
-        {
-          "subject": "hotelroom_front_o2",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o13"
+          "predicate": "on",
+          "object": "hotelroom_front_o0"
         },
         {
           "subject": "hotelroom_front_o2",
@@ -7911,6 +7504,16 @@
           "object": "hotelroom_front_o3"
         },
         {
+          "subject": "hotelroom_front_o2",
+          "predicate": "beside",
+          "object": "hotelroom_front_o0"
+        },
+        {
+          "subject": "hotelroom_front_o2",
+          "predicate": "left_of",
+          "object": "hotelroom_front_o0"
+        },
+        {
           "subject": "hotelroom_front_o3",
           "predicate": "beside",
           "object": "hotelroom_front_o6"
@@ -7927,93 +7530,48 @@
         },
         {
           "subject": "hotelroom_front_o3",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o3",
           "predicate": "left_of",
-          "object": "hotelroom_front_o26"
+          "object": "hotelroom_front_o7"
         },
         {
           "subject": "hotelroom_front_o3",
           "predicate": "near",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o3",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o9"
+          "object": "hotelroom_front_o7"
         },
         {
           "subject": "hotelroom_front_o3",
           "predicate": "near",
-          "object": "hotelroom_front_o9"
+          "object": "hotelroom_front_o2"
         },
         {
           "subject": "hotelroom_front_o3",
           "predicate": "left_of",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o3",
-          "predicate": "near",
-          "object": "hotelroom_front_o15"
+          "object": "hotelroom_front_o4"
         },
         {
           "subject": "hotelroom_front_o4",
           "predicate": "beside",
-          "object": "hotelroom_front_o14"
+          "object": "hotelroom_front_o1"
         },
         {
           "subject": "hotelroom_front_o4",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o14"
+          "predicate": "left_of",
+          "object": "hotelroom_front_o1"
+        },
+        {
+          "subject": "hotelroom_front_o4",
+          "predicate": "near",
+          "object": "hotelroom_front_o7"
+        },
+        {
+          "subject": "hotelroom_front_o4",
+          "predicate": "near",
+          "object": "hotelroom_front_o5"
         },
         {
           "subject": "hotelroom_front_o4",
           "predicate": "above",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "below",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "near",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "below",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "near",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "below",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o4",
-          "predicate": "near",
-          "object": "hotelroom_front_o19"
+          "object": "hotelroom_front_o0"
         },
         {
           "subject": "hotelroom_front_o5",
@@ -8028,42 +7586,22 @@
         {
           "subject": "hotelroom_front_o5",
           "predicate": "near",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o5",
-          "predicate": "near",
           "object": "hotelroom_front_o4"
         },
         {
           "subject": "hotelroom_front_o5",
-          "predicate": "below",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o6",
           "predicate": "beside",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o0"
         },
         {
-          "subject": "hotelroom_front_o6",
+          "subject": "hotelroom_front_o5",
           "predicate": "right_of",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o0"
         },
         {
-          "subject": "hotelroom_front_o6",
+          "subject": "hotelroom_front_o5",
           "predicate": "above",
-          "object": "hotelroom_front_o13"
-        },
-        {
-          "subject": "hotelroom_front_o6",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o13"
-        },
-        {
-          "subject": "hotelroom_front_o6",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o13"
+          "object": "hotelroom_front_o0"
         },
         {
           "subject": "hotelroom_front_o6",
@@ -8078,11 +7616,6 @@
         {
           "subject": "hotelroom_front_o6",
           "predicate": "below",
-          "object": "hotelroom_front_o3"
-        },
-        {
-          "subject": "hotelroom_front_o6",
-          "predicate": "overlapping",
           "object": "hotelroom_front_o3"
         },
         {
@@ -8097,1403 +7630,63 @@
         },
         {
           "subject": "hotelroom_front_o6",
-          "predicate": "near",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "near",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "below",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "near",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "near",
-          "object": "hotelroom_front_o14"
-        },
-        {
-          "subject": "hotelroom_front_o7",
-          "predicate": "near",
-          "object": "hotelroom_front_o13"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "beside",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "below",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "beside",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "below",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "beside",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "above",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "beside",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o8",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "beside",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "below",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "beside",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "below",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "beside",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "below",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "beside",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o9",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "beside",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "beside",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "beside",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "beside",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o10",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "beside",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "below",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "beside",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "below",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "beside",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "below",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "beside",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o11",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "beside",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "above",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "beside",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "beside",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "beside",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o12",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "beside",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "below",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "inside",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o6"
-        },
-        {
-          "subject": "hotelroom_front_o13",
           "predicate": "beside",
           "object": "hotelroom_front_o2"
         },
         {
-          "subject": "hotelroom_front_o13",
+          "subject": "hotelroom_front_o6",
           "predicate": "right_of",
           "object": "hotelroom_front_o2"
         },
         {
-          "subject": "hotelroom_front_o13",
-          "predicate": "near",
-          "object": "hotelroom_front_o7"
+          "subject": "hotelroom_front_o6",
+          "predicate": "beside",
+          "object": "hotelroom_front_o0"
         },
         {
-          "subject": "hotelroom_front_o13",
-          "predicate": "below",
+          "subject": "hotelroom_front_o6",
+          "predicate": "left_of",
+          "object": "hotelroom_front_o0"
+        },
+        {
+          "subject": "hotelroom_front_o6",
+          "predicate": "above",
+          "object": "hotelroom_front_o0"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "right_of",
+          "object": "hotelroom_front_o6"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "near",
+          "object": "hotelroom_front_o6"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "above",
+          "object": "hotelroom_front_o0"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "on",
+          "object": "hotelroom_front_o0"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "near",
+          "object": "hotelroom_front_o4"
+        },
+        {
+          "subject": "hotelroom_front_o7",
+          "predicate": "right_of",
           "object": "hotelroom_front_o3"
         },
         {
-          "subject": "hotelroom_front_o13",
+          "subject": "hotelroom_front_o7",
           "predicate": "near",
           "object": "hotelroom_front_o3"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "beside",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "below",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "inside",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o4"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "below",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "near",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "near",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o14",
-          "predicate": "near",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "beside",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "above",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o26"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "beside",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "above",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "beside",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o15",
-          "predicate": "near",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "beside",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "beside",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "near",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o16",
-          "predicate": "near",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "beside",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "above",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "beside",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "above",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "beside",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "beside",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o17",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o18"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "beside",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "above",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "beside",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "beside",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "beside",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o18",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "beside",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "beside",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "beside",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o19",
-          "predicate": "near",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "beside",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "beside",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "near",
-          "object": "hotelroom_front_o27"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o20",
-          "predicate": "near",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "beside",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "beside",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "near",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o21",
-          "predicate": "near",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "beside",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "beside",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "near",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o22",
-          "predicate": "near",
-          "object": "hotelroom_front_o20"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "beside",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o28"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "beside",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "beside",
-          "object": "hotelroom_front_o1"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o1"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "above",
-          "object": "hotelroom_front_o1"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "inside",
-          "object": "hotelroom_front_o1"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o1"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o23",
-          "predicate": "near",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "beside",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "beside",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "near",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o24",
-          "predicate": "near",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "beside",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o29"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "beside",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "near",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o25",
-          "predicate": "near",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "beside",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "below",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o15"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "beside",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "above",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o9"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "beside",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o12"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o26",
-          "predicate": "near",
-          "object": "hotelroom_front_o10"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "beside",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "above",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "overlapping",
-          "object": "hotelroom_front_o8"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "beside",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o19"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "beside",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o17"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "beside",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o27",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o11"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "beside",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o22"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "beside",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "near",
-          "object": "hotelroom_front_o21"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "left_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o28",
-          "predicate": "near",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "beside",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o25"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "near",
-          "object": "hotelroom_front_o24"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "near",
-          "object": "hotelroom_front_o16"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "right_of",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "same_surface",
-          "object": "hotelroom_front_o23"
-        },
-        {
-          "subject": "hotelroom_front_o29",
-          "predicate": "near",
-          "object": "hotelroom_front_o23"
         }
       ]
     },
