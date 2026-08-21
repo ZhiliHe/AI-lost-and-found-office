@@ -54,6 +54,8 @@ OBJECT_SYNONYMS = {
     "tablet":     ["tablet", "ipad"],
     "watch":      ["watch", "smartwatch"],
     "skateboard": ["skateboard", "board"],
+    "tissue":     ["tissue", "napkin", "serviette", "paper towel", "kitchen roll", "toilet paper", "wet wipe", "Kleenex", "loo roll", "baby wipe"],
+    "hat":        ["hat", "cap", "beanie", "headwear"],
 }
 
 QUERY_OBJECT_ALIASES = {
